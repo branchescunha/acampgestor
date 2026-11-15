@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
-import { CheckCircle2, CircleDashed, LogOut, TentTree } from 'lucide-react'
+import { CheckCircle2, CircleDashed, LogOut, Plus, TentTree } from 'lucide-react'
+import CreateCampForm from '../components/CreateCampForm'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { useAuthContext } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
@@ -35,6 +36,8 @@ export default function Gestor() {
   const [camps, setCamps] = useState([])
   const [loadingCamps, setLoadingCamps] = useState(true)
   const [error, setError] = useState('')
+  const [creatingCamp, setCreatingCamp] = useState(false)
+  const [success, setSuccess] = useState('')
 
   const loadCamps = useCallback(async () => {
     setLoadingCamps(true)
@@ -96,6 +99,15 @@ export default function Gestor() {
             {profileError ||
               'Sua conta não possui permissão ativa para acessar a área do gestor.'}
           </p>
+          {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            <LogOut size={18} />
+            Sair da conta
+          </button>
         </section>
       </main>
     )
@@ -110,10 +122,12 @@ export default function Gestor() {
   }
 
   async function handleLogout() {
+    setError('')
     const { error: logoutError } = await supabase.auth.signOut()
 
     if (logoutError) {
       logError('Gestor', logoutError)
+      setError('Não foi possível sair da conta. Tente novamente.')
       return
     }
   }
@@ -126,21 +140,53 @@ export default function Gestor() {
             <p className="text-xs uppercase tracking-[0.3em] text-yellow-500">
               AcampGestor
             </p>
-            <h1 className="mt-3 text-3xl font-bold">Área do gestor</h1>
+            <h1 className="mt-3 text-3xl font-bold">Meus Acampamentos</h1>
             <p className="mt-3 max-w-2xl text-zinc-400">
               Selecione um acampamento para acessar o painel de gestão.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-300 transition hover:bg-zinc-900 hover:text-white"
-          >
-            <LogOut size={18} />
-            Sair
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setCreatingCamp(true)
+                setSuccess('')
+              }}
+              disabled={creatingCamp}
+              className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-yellow-400 disabled:opacity-60"
+            >
+              <Plus size={18} />
+              Novo acampamento
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-300 transition hover:bg-zinc-900 hover:text-white"
+            >
+              <LogOut size={18} />
+              Sair
+            </button>
+          </div>
         </div>
+
+        {success && (
+          <p role="status" className="mt-6 text-sm text-emerald-300">
+            {success}
+          </p>
+        )}
+
+        {creatingCamp && (
+          <CreateCampForm
+            userId={session.user.id}
+            onCancel={() => setCreatingCamp(false)}
+            onCreated={async () => {
+              setCreatingCamp(false)
+              await loadCamps()
+              setSuccess('Acampamento criado. Selecione-o para começar a gestão.')
+            }}
+          />
+        )}
 
         {error && (
           <p

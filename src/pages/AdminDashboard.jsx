@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Building2,
-  FileUser,
   TentTree,
   UserCheck,
   UserCog,
@@ -16,20 +15,7 @@ const initialMetrics = {
   camps: 0,
   profiles: 0,
   activeGestors: 0,
-  pendingRequests: 0,
   publicCamps: 0,
-}
-
-const requestStatusLabels = {
-  pending: 'Pendente',
-  approved: 'Aprovada',
-  rejected: 'Recusada',
-}
-
-const requestStatusStyles = {
-  pending: 'bg-yellow-500/20 text-yellow-300',
-  approved: 'bg-green-500/20 text-green-400',
-  rejected: 'bg-red-500/20 text-red-400',
 }
 
 const organizationTypeLabels = {
@@ -60,11 +46,6 @@ const metricCards = [
     icon: UserCheck,
   },
   {
-    key: 'pendingRequests',
-    label: 'Solicitações pendentes',
-    icon: FileUser,
-  },
-  {
     key: 'publicCamps',
     label: 'Acampamentos públicos',
     icon: TentTree,
@@ -72,12 +53,6 @@ const metricCards = [
 ]
 
 const shortcuts = [
-  {
-    label: 'Solicitações',
-    description: 'Revisar pedidos de acesso',
-    path: '/admin/solicitacoes',
-    icon: FileUser,
-  },
   {
     label: 'Usuários',
     description: 'Gerenciar profiles de acesso',
@@ -111,7 +86,6 @@ export default function AdminDashboard() {
   const [metrics, setMetrics] = useState(initialMetrics)
   const [organizations, setOrganizations] = useState([])
   const [camps, setCamps] = useState([])
-  const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -124,11 +98,9 @@ export default function AdminDashboard() {
       campsCount,
       profilesCount,
       activeGestorsCount,
-      pendingRequestsCount,
       publicCampsCount,
       latestOrganizations,
       latestCamps,
-      latestRequests,
     ] = await Promise.all([
       supabase.from('organizations').select('id', { count: 'exact', head: true }),
       supabase.from('camps').select('id', { count: 'exact', head: true }),
@@ -138,10 +110,6 @@ export default function AdminDashboard() {
         .select('id', { count: 'exact', head: true })
         .eq('role', 'gestor')
         .eq('status', 'active'),
-      supabase
-        .from('access_requests')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending'),
       supabase
         .from('camps')
         .select('id', { count: 'exact', head: true })
@@ -156,11 +124,6 @@ export default function AdminDashboard() {
         .select('id, name, slug, public_ranking_enabled, created_at, organizations(name)')
         .order('created_at', { ascending: false })
         .limit(5),
-      supabase
-        .from('access_requests')
-        .select('id, name, email, status, created_at')
-        .order('created_at', { ascending: false })
-        .limit(5),
     ])
 
     const responses = [
@@ -168,11 +131,9 @@ export default function AdminDashboard() {
       campsCount,
       profilesCount,
       activeGestorsCount,
-      pendingRequestsCount,
       publicCampsCount,
       latestOrganizations,
       latestCamps,
-      latestRequests,
     ]
     const dashboardError = responses.find((response) => response.error)?.error
 
@@ -188,12 +149,10 @@ export default function AdminDashboard() {
       camps: getCount(campsCount),
       profiles: getCount(profilesCount),
       activeGestors: getCount(activeGestorsCount),
-      pendingRequests: getCount(pendingRequestsCount),
       publicCamps: getCount(publicCampsCount),
     })
     setOrganizations(latestOrganizations.data || [])
     setCamps(latestCamps.data || [])
-    setRequests(latestRequests.data || [])
     setLoading(false)
   }, [])
 
@@ -259,7 +218,7 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
         {shortcuts.map((shortcut) => {
           const Icon = shortcut.icon
 
@@ -279,7 +238,7 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-3">
+      <div className="mt-8 grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
           <h2 className="text-xl font-bold">Últimas organizações</h2>
 
@@ -354,46 +313,6 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
-          <h2 className="text-xl font-bold">Últimas solicitações</h2>
-
-          {requests.length === 0 ? (
-            <p className="mt-6 text-sm text-zinc-400">
-              Nenhuma solicitação encontrada.
-            </p>
-          ) : (
-            <div className="mt-6 space-y-3">
-              {requests.map((request) => (
-                <div
-                  key={request.id}
-                  className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <strong className="block">{request.name}</strong>
-                      <span className="mt-1 block break-all text-sm text-zinc-400">
-                        {request.email}
-                      </span>
-                    </div>
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        requestStatusStyles[request.status] ||
-                        requestStatusStyles.pending
-                      }`}
-                    >
-                      {requestStatusLabels[request.status] || request.status}
-                    </span>
-                  </div>
-
-                  <span className="mt-3 block text-xs text-zinc-500">
-                    {formatDate(request.created_at)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </section>
   )

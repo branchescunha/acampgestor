@@ -3,6 +3,7 @@ import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import { createManagedProfile } from '../features/auth/profileAdministration'
 
 const initialForm = {
   id: '',
@@ -149,35 +150,41 @@ export default function Users() {
       updated_at: new Date().toISOString(),
     }
 
-    const request = editingId
-      ? supabase
+    try {
+      if (editingId) {
+        const { error: saveError } = await supabase
           .from('profiles')
           .update(payload)
           .eq('id', editingId)
-      : supabase
-          .from('profiles')
-          .insert({
-            ...payload,
-            id: form.id.trim(),
-          })
+        if (saveError) throw saveError
+      } else {
+        const result = await createManagedProfile(supabase, {
+          ...payload,
+          id: form.id.trim(),
+        })
 
-    const { error: saveError } = await request
+        if (!result.created) {
+          handleEdit(result.profile)
+          setSuccess(
+            'Perfil já provisionado. Revise os dados, o papel e o status antes de salvar.'
+          )
+          return
+        }
+      }
 
-    if (saveError) {
+      resetForm()
+      await loadProfiles()
+      setSuccess(
+        editingId
+          ? 'Perfil atualizado com sucesso.'
+          : 'Perfil criado com sucesso.'
+      )
+    } catch (saveError) {
       logError('Users', saveError)
       setError(getSaveErrorMessage(saveError))
+    } finally {
       setSaving(false)
-      return
     }
-
-    resetForm()
-    await loadProfiles()
-    setSuccess(
-      editingId
-        ? 'Perfil atualizado com sucesso.'
-        : 'Perfil criado com sucesso.',
-    )
-    setSaving(false)
   }
 
   const columns = [
@@ -244,12 +251,13 @@ export default function Users() {
       <PageHeader
         eyebrow="Usuários"
         title="Perfis de acesso"
-        description="Crie primeiro o usuário no Supabase Auth. Depois cadastre aqui o perfil usando o User UID."
+        description="Usuários confirmados recebem um perfil GESTOR automaticamente. Use o User UID para revisar o perfil existente ou cadastrar um perfil ausente."
       />
 
       <div className="mb-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-sm text-yellow-100">
-        Esta tela não cria usuários no Supabase Auth. Ela apenas vincula um
-        usuário existente a um perfil de acesso do AcampGestor.
+        Esta tela não cria usuários no Supabase Auth. Perfis já provisionados
+        são carregados para revisão, sem sobrescrever papel ou status
+        automaticamente.
       </div>
 
       {error && (

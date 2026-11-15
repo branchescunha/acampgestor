@@ -63,8 +63,8 @@ const benefits = [
 ]
 
 const steps = [
-  'A organização solicita acesso',
-  'O administrador libera o uso',
+  'O responsável ou a diretoria cria sua conta',
+  'A conta acessa Meus Acampamentos',
   'O gestor cria o acampamento',
   'Equipes/Quartos, Times e participantes são cadastrados',
   'As pontuações são lançadas',
@@ -80,10 +80,10 @@ const rankingPreview = [
 function PrimaryCta({ className = '' }) {
   return (
     <Link
-      to="/solicitar-acesso"
+      to="/cadastro"
       className={`inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-6 py-4 font-semibold text-zinc-950 transition hover:bg-yellow-400 ${className}`}
     >
-      Solicitar acesso
+      Criar conta
       <ArrowRight size={18} />
     </Link>
   )
@@ -122,10 +122,10 @@ export default function LandingPage() {
             </Link>
 
             <Link
-              to="/solicitar-acesso"
+              to="/cadastro"
               className="whitespace-nowrap rounded-xl bg-yellow-500 px-3 py-2 font-semibold text-zinc-950 transition hover:bg-yellow-400 sm:px-4 sm:py-3"
             >
-              Solicitar acesso
+              Criar conta
             </Link>
           </nav>
         </div>

@@ -1,9 +1,49 @@
 ﻿import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import { getSupportUrl } from '../features/auth/support'
 
 export default function ForgotPassword() {
+  const [searchParams] = useSearchParams()
+  if (searchParams.get('modo') === 'email') return <EmailPasswordRecovery />
+  const supportUrl = getSupportUrl(import.meta.env.VITE_SUPPORT_URL)
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-zinc-950 p-6 text-white">
+      <section className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-8">
+        <p className="text-xs uppercase tracking-[0.3em] text-yellow-500">
+          AcampGestor
+        </p>
+        <h1 className="mt-4 text-3xl font-bold">Recuperar acesso</h1>
+        {supportUrl ? (
+          <>
+            <p className="mt-4 text-zinc-400">
+              Entre em contato com o suporte para solicitar a recuperação assistida.
+              Não envie sua senha.
+            </p>
+            <a href={supportUrl} target="_blank" rel="noopener noreferrer"
+              className="mt-4 inline-flex text-sm font-semibold text-yellow-400 hover:text-yellow-300">
+              Acessar suporte
+            </a>
+          </>
+        ) : (
+          <p className="mt-4 text-zinc-400">
+            A recuperação assistida está indisponível no momento. Não há um canal de suporte configurado.
+          </p>
+        )}
+        <Link
+          to="/login"
+          className="mt-6 block text-center text-sm text-zinc-300 hover:text-yellow-500"
+        >
+          Voltar para o login
+        </Link>
+      </section>
+    </main>
+  )
+}
+
+function EmailPasswordRecovery() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -28,7 +68,7 @@ export default function ForgotPassword() {
       emailValue,
       {
         redirectTo: `${window.location.origin}/redefinir-senha`,
-      },
+      }
     )
 
     setLoading(false)
@@ -39,7 +79,7 @@ export default function ForgotPassword() {
       return
     }
 
-    setSuccess('E-mail de recuperação enviado. Verifique sua caixa de entrada.')
+    setSuccess('Se o endereço estiver autorizado para receber e-mails, verifique sua caixa de entrada.')
   }
 
   return (

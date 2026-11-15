@@ -3,8 +3,7 @@ import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthContext } from '../hooks/useAuth'
 import { logError } from '../utils/logger'
-
-const MIN_PASSWORD_LENGTH = 8
+import { MIN_PASSWORD_LENGTH } from '../features/auth/registration'
 
 export default function Account() {
   const { campSlug } = useParams()

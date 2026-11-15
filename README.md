@@ -13,7 +13,7 @@ A aplicação está disponível em produção para demonstração dos fluxos pú
 Principais fluxos:
 
 - landing pública;
-- solicitação de acesso;
+- cadastro de gestores;
 - painel ADMIN;
 - painel GESTOR;
 - ranking público por slug do acampamento.
@@ -24,7 +24,7 @@ Principais fluxos:
 
 - autenticação com Supabase Auth;
 - login por e-mail e senha;
-- recuperação e redefinição de senha;
+- orientação de recuperação assistida e mecanismos legados de redefinição;
 - página de conta;
 - perfis `admin` e `gestor`;
 - controle de status de acesso.
@@ -32,10 +32,8 @@ Principais fluxos:
 ### Plataforma ADMIN
 
 - dashboard administrativo;
-- revisão de solicitações de acesso;
-- aprovação de gestores;
-- gestão de usuários e convites;
-- gestão de organizações e membros;
+- gestão de usuários;
+- gestão de organizações;
 - gestão de acampamentos;
 - acesso administrativo às operações dos acampamentos.
 
@@ -56,8 +54,7 @@ Principais fluxos:
 ### Público
 
 - landing pública;
-- solicitação de acesso;
-- aceite de convite;
+- cadastro de gestores por e-mail e senha;
 - ranking público por slug.
 
 ## Modelo de Domínio
@@ -94,16 +91,16 @@ Um participante pode possuir os dois vínculos, mas ambos são opcionais. Inspe�
 ### ADMIN
 
 - administra a plataforma;
-- gerencia solicitações, usuários, convites, organizações e acampamentos;
+- gerencia usuários, organizações e acampamentos;
 - pode acessar operações administrativas dos acampamentos.
 
 ADMIN e GESTOR utilizam painéis separados.
 
-## Aprovação de Acesso
+## Cadastro de Gestores
 
-O fluxo de aprovação começa em `/solicitar-acesso`.
+O incremento local da V2 usa `/cadastro`, senha mínima de 6 caracteres e sessão imediata do Supabase Auth, sem aprovação administrativa ou confirmação de e-mail. Uma conta de responsável ou diretoria pode criar vários acampamentos independentes em Meus Acampamentos. A migration 014 foi aplicada em produção e suas verificações passaram, conforme informado pelo responsável. O frontend V2 ainda não foi publicado; cadastro e isolamento reais continuam pendentes de teste.
 
-Após a aprovação por um ADMIN, uma Supabase Edge Function executa o onboarding privilegiado do gestor, incluindo criação ou reutilização do usuário, profile, organização e vínculo inicial.
+Solicitações, aprovações, convites e associação de membros por e-mail são desativados na V2, preservando os dados históricos. A Edge Function antiga foi desativada e validada com HTTP 410, conforme informado pelo responsável. A recuperação pública mostra um canal HTTPS somente quando configurado por `VITE_SUPPORT_URL`; sem configuração, informa que a recuperação assistida está indisponível. Consulte os riscos e a sequência de publicação em [cadastro V2](docs/v2-registration.md).
 
 ## Ranking Público
 
@@ -193,9 +190,11 @@ package.json
 
 ## Status
 
+O primeiro incremento da V2 (cadastro público de gestores e criação de acampamentos) está em desenvolvimento local. Consulte [configuração e validação do cadastro V2](docs/v2-registration.md) antes de habilitar o fluxo em um ambiente.
+
 Versão estável `v1.0.0` publicada.
 
-Validações concluídas:
+Validações históricas da release V1:
 
 - 66 testes automatizados;
 - lint aprovado;

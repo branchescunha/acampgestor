@@ -4,39 +4,17 @@ import { supabase } from '../lib/supabase'
 import { useAuthContext } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { logError } from '../utils/logger'
-
-function getSafeRedirectPath(value) {
-  if (typeof value !== 'string') return '/admin'
-  if (!value.startsWith('/') || value.startsWith('//')) return '/admin'
-  return value
-}
-
-function getRoleRedirectPath(path, role) {
-  if (role === 'admin') {
-    return path.startsWith('/admin') ? path : '/admin'
-  }
-
-  if (role === 'gestor') {
-    if (path === '/gestor' || path.startsWith('/gestor/')) return path
-    if (/^\/[^/]+\/gestor(?:\/|$)/.test(path)) return path
-    return '/gestor'
-  }
-
-  return '/admin'
-}
+import { getLoginRedirectPath } from '../features/auth/login'
 
 export default function Login() {
   const location = useLocation()
   const { session, loadingAuth } = useAuthContext()
-  const { role, loading: loadingProfile } = useUserProfile()
+  const { role, isActive, loading: loadingProfile } = useUserProfile()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const redirectPath = getRoleRedirectPath(
-    getSafeRedirectPath(location.state?.from),
-    role,
-  )
+  const redirectPath = getLoginRedirectPath(location.state?.from, isActive ? role : '')
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -59,7 +37,11 @@ export default function Login() {
 
     if (loginError) {
       logError('Login', loginError)
-      setError('Não foi possível entrar. Verifique o e-mail e a senha.')
+      setError(
+        loginError.code === 'email_not_confirmed'
+          ? 'O acesso desta conta precisa de revisão. Procure o suporte.'
+          : 'Não foi possível entrar. Verifique o e-mail e a senha.'
+      )
       setLoading(false)
       return
     }
@@ -90,11 +72,11 @@ export default function Login() {
         </p>
 
         <h1 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl">
-          Painel administrativo
+          Entrar no AcampGestor
         </h1>
 
         <p className="mt-4 text-zinc-400">
-          Acesse o painel administrativo do seu evento.
+          Acesse sua conta para gerenciar seus acampamentos.
         </p>
 
         <label
@@ -159,14 +141,14 @@ export default function Login() {
           to="/recuperar-senha"
           className="mt-3 block text-center text-sm text-zinc-400 hover:text-yellow-500"
         >
-          Esqueci minha senha
+          Preciso recuperar o acesso
         </Link>
 
         <Link
-          to="/solicitar-acesso"
-          className="mt-4 block text-center text-sm text-zinc-400 hover:text-yellow-500"
+          to="/cadastro"
+          className="mt-4 block text-center text-sm text-zinc-300 hover:text-yellow-500"
         >
-          Ainda não tem conta? Solicitar acesso
+          Criar conta de gestor
         </Link>
       </form>
     </main>

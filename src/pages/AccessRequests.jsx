@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import RoleAccessNotice from '../components/RoleAccessNotice'
 import ResponsiveTable from '../components/ResponsiveTable'
@@ -290,14 +289,8 @@ export default function AccessRequests() {
 
       <div className="mb-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-sm text-yellow-100">
         Solicitações aprovadas criam automaticamente usuário, profile de gestor
-        e vínculo inicial com a organização.{' '}
-        <Link
-          to="/admin/convites"
-          className="font-semibold text-yellow-300 hover:text-yellow-200"
-        >
-          Convites
-        </Link>{' '}
-        continuam disponíveis como histórico, apoio ou fluxo manual secundário.
+        e vínculo inicial com a organização. Este é um fluxo administrativo
+        legado; novos gestores podem criar sua conta pelo cadastro público.
       </div>
 
       {error && (

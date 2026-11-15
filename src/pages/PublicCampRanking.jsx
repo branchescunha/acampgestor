@@ -166,10 +166,10 @@ export default function PublicCampRanking() {
               </Link>
 
               <Link
-                to="/solicitar-acesso"
+                to="/cadastro"
                 className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-yellow-400"
               >
-                Solicitar acesso
+                Criar conta de gestor
               </Link>
             </div>
           </div>

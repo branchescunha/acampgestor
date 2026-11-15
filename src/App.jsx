@@ -15,20 +15,16 @@ import RequireActiveCamp from './components/RequireActiveCamp'
 const PublicCampRanking = lazy(() => import('./pages/PublicCampRanking'))
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
 const Gestor = lazy(() => import('./pages/Gestor'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
-const RequestAccess = lazy(() => import('./pages/RequestAccess'))
-const AcceptInvitation = lazy(() => import('./pages/AcceptInvitation'))
 const Admin = lazy(() => import('./pages/Admin'))
 const Account = lazy(() => import('./pages/Account'))
-const AccessRequests = lazy(() => import('./pages/AccessRequests'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const Camps = lazy(() => import('./pages/Camps'))
 const Organizations = lazy(() => import('./pages/Organizations'))
-const OrganizationMembers = lazy(() => import('./pages/OrganizationMembers'))
 const Users = lazy(() => import('./pages/Users'))
-const Invitations = lazy(() => import('./pages/Invitations'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const CampGroups = lazy(() => import('./pages/CampGroups'))
 const CompetitionTeams = lazy(() => import('./pages/CompetitionTeams'))
@@ -71,10 +67,11 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
 
         <Route path="/login" element={<Login />} />
+        <Route path="/cadastro" element={<Register />} />
 
-        <Route path="/solicitar-acesso" element={<RequestAccess />} />
+        <Route path="/solicitar-acesso" element={<Navigate to="/cadastro" replace />} />
 
-        <Route path="/convite/:token" element={<AcceptInvitation />} />
+        <Route path="/convite/:token" element={<Navigate to="/cadastro" replace />} />
 
         <Route path="/recuperar-senha" element={<ForgotPassword />} />
         <Route
@@ -102,7 +99,7 @@ export default function App() {
             path="solicitacoes"
             element={
               <AdminOnlyRoute>
-                <AccessRequests />
+                <Navigate to="/admin/usuarios" replace />
               </AdminOnlyRoute>
             }
           />
@@ -118,7 +115,7 @@ export default function App() {
             path="convites"
             element={
               <AdminOnlyRoute>
-                <Invitations />
+                <Navigate to="/admin/usuarios" replace />
               </AdminOnlyRoute>
             }
           />
@@ -126,7 +123,7 @@ export default function App() {
           <Route path="organizacoes" element={<Organizations />} />
           <Route
             path="organizacoes/:organizationId/membros"
-            element={<OrganizationMembers />}
+            element={<Navigate to="/admin/organizacoes" replace />}
           />
           <Route
             path="account"

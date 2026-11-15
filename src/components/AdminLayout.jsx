@@ -109,7 +109,7 @@ export default function AdminLayout({ children }) {
           <header className="mb-8 flex items-center justify-between lg:hidden">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-yellow-500">
-                Admin
+                {isCampAdminRoute ? 'Acampamento' : 'Plataforma'}
               </p>
 
               <h1 className="mt-2 text-xl font-bold">

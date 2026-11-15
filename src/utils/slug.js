@@ -1,6 +1,10 @@
 const RESERVED_SLUGS = new Set([
   'admin',
   'login',
+  'cadastro',
+  'gestor',
+  'forgot-password',
+  'reset-password',
   'ranking',
   'solicitar-acesso',
   'recuperar-senha',

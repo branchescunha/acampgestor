@@ -2,8 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
-
-const MIN_PASSWORD_LENGTH = 8
+import { MIN_PASSWORD_LENGTH } from '../features/auth/registration'
 
 export default function ResetPassword() {
   const navigate = useNavigate()

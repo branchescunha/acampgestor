@@ -3,14 +3,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck,
   Building2,
-  FileUser,
   TentTree,
   Swords,
   Download,
   History,
   LayoutDashboard,
   LogOut,
-  MailPlus,
   PlusCircle,
   Trophy,
   UserCog,
@@ -118,13 +116,7 @@ export default function Sidebar({ isMenuOpen = false, onClose }) {
     { label: 'Acampamentos', path: '/admin/acampamentos', icon: TentTree },
     { label: 'Organizações', path: '/admin/organizacoes', icon: Building2 },
     ...(isAdmin
-      ? [{ label: 'Solicitações', path: '/admin/solicitacoes', icon: FileUser }]
-      : []),
-    ...(isAdmin
       ? [{ label: 'Usuários', path: '/admin/usuarios', icon: UserCog }]
-      : []),
-    ...(isAdmin
-      ? [{ label: 'Convites', path: '/admin/convites', icon: MailPlus }]
       : []),
   ]
 
