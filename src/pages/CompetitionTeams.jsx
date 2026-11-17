@@ -64,6 +64,7 @@ function getDeleteErrorMessage(error) {
 
 export default function CompetitionTeams() {
   const [teams, setTeams] = useState([])
+  const [participants, setParticipants] = useState([])
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -87,9 +88,18 @@ export default function CompetitionTeams() {
         .order('status', { ascending: true })
         .order('name', { ascending: true })
 
-      if (error) {
-        logError('CompetitionTeams', error)
+      const { data: members, error: membersError } = await supabase
+        .from('participants')
+        .select('id, full_name, competition_team_id, is_active')
+        .eq('camp_id', activeCampId)
+        .order('full_name')
+
+      if (error || membersError) {
+        logError('CompetitionTeams', error || membersError)
         if (shouldIgnore) return
+        setTeams([])
+        setParticipants([])
+        showError('Erro ao carregar Times e participantes.')
         setLoading(false)
         return
       }
@@ -97,6 +107,7 @@ export default function CompetitionTeams() {
       if (shouldIgnore) return
 
       setTeams(data || [])
+      setParticipants(members || [])
       setLoading(false)
     }
 
@@ -109,13 +120,14 @@ export default function CompetitionTeams() {
 
     const timeoutId = window.setTimeout(() => {
       setTeams([])
+      setParticipants([])
       setLoading(false)
     }, 0)
 
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [activeCampId])
+  }, [activeCampId, showError])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -469,6 +481,20 @@ export default function CompetitionTeams() {
                   <p>Símbolo: {team.symbol || 'Não definido'}</p>
                   <p>Responsável: {team.leader_name || 'Não definido'}</p>
                 </div>
+
+                <details className="mt-4 text-sm text-zinc-300">
+                  <summary className="cursor-pointer">Ver participantes</summary>
+                  {!participants.some((participant) => participant.competition_team_id === team.id) && (
+                    <p className="mt-2">Nenhum participante vinculado.</p>
+                  )}
+                  <ul className="mt-2 space-y-1">
+                    {participants.filter((participant) => participant.competition_team_id === team.id).map((participant) => (
+                      <li key={participant.id}>
+                        {participant.full_name}{!participant.is_active && ' (inativo)'}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   <button

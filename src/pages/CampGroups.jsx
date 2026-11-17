@@ -74,6 +74,9 @@ export default function CampGroups() {
       if (tribesError || participantsError) {
         logError('CampGroups', tribesError || participantsError)
         if (shouldIgnore) return
+        setTribes([])
+        setParticipants([])
+        showError('Erro ao carregar equipes e participantes.')
         setLoading(false)
         return
       }
@@ -101,6 +104,15 @@ export default function CampGroups() {
     return () => {
       window.clearTimeout(timeoutId)
     }
+  }, [activeCampId, showError])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setForm(initialForm)
+      setEditingId(null)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [activeCampId])
 
   async function reloadTribes() {
@@ -627,6 +639,17 @@ export default function CampGroups() {
                     <p>Responsável: {tribe.leader_name || 'Não definido'}</p>
                     <p>Integrantes ativos: {membersCount}</p>
                   </div>
+
+                  {membersCount > 0 && (
+                    <details className="mt-4 text-sm text-zinc-300">
+                      <summary className="cursor-pointer">Ver participantes</summary>
+                      <ul className="mt-2 space-y-1">
+                        {getTribeParticipants(tribe.id).map((participant) => (
+                          <li key={participant.id}>{participant.full_name}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
 
                   <button
                     type="button"
