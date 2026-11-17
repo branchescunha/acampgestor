@@ -12,12 +12,12 @@ import {
 test('validateScoreForm requires a competition team for new scores', () => {
   assert.equal(
     validateScoreForm(initialScoreForm, 'camp-1', false),
-    'Selecione um Time.',
+    'Selecione uma equipe.',
   )
 })
 
 test('validateScoreForm rejects non-finite and non-positive amounts', () => {
-  for (const points of ['NaN', 'Infinity', '-Infinity', '0', '-1']) {
+  for (const points of ['NaN', 'Infinity', '-Infinity', '0', '-1', '0.5', '2147483648']) {
     assert.ok(validateScoreForm({
       ...initialScoreForm,
       competition_team_id: 'team-1',
@@ -25,6 +25,12 @@ test('validateScoreForm rejects non-finite and non-positive amounts', () => {
       points,
     }, 'camp-1'))
   }
+})
+
+test('new manual scores require an explicit reason', () => {
+  const form = { ...initialScoreForm, competition_team_id: 'team-1', category: 'Outro', points: '5' }
+  assert.equal(validateScoreForm(form, 'camp-1'), 'Informe o motivo do lançamento.')
+  assert.equal(validateScoreForm({ ...form, reason: 'Participação' }, 'camp-1'), '')
 })
 
 test('validateScoreForm allows legacy editing with tribe only', () => {

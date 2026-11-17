@@ -130,23 +130,24 @@ export default function App() {
             element={<Navigate to="/admin/conta" replace />}
           />
           {/* Legacy compatibility for /admin/tribos. */}
-          <Route path="tribos" element={<Navigate to="/admin/equipes" replace />} />
+          <Route path="tribos" element={<Navigate to="/admin/quartos" replace />} />
           <Route
             path="equipes"
-            element={
-              <RequireActiveCamp>
-                <CampGroups />
-              </RequireActiveCamp>
-            }
-          />
-          <Route
-            path="times"
             element={
               <RequireActiveCamp>
                 <CompetitionTeams />
               </RequireActiveCamp>
             }
           />
+          <Route
+            path="quartos"
+            element={
+              <RequireActiveCamp>
+                <CampGroups />
+              </RequireActiveCamp>
+            }
+          />
+          <Route path="times" element={<Navigate to="/admin/equipes" replace />} />
           <Route
             path="participantes"
             element={
@@ -202,8 +203,10 @@ export default function App() {
         <Route path="/:campSlug/gestor" element={<CampAdminRoute />}>
           <Route index element={<Dashboard />} />
           <Route path="conta" element={<Account />} />
-          <Route path="equipes" element={<CampGroups />} />
-          <Route path="times" element={<CompetitionTeams />} />
+          <Route path="equipes" element={<CompetitionTeams />} />
+          <Route path="quartos" element={<CampGroups />} />
+          <Route path="times" element={<Navigate to="../equipes" replace />} />
+          <Route path="tribos" element={<Navigate to="../quartos" replace />} />
           <Route path="participantes" element={<Participants />} />
           <Route path="pontuacao" element={<Scores />} />
           <Route path="historico" element={<History />} />

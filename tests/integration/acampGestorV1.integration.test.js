@@ -132,7 +132,9 @@ test('modelo operacional mantém Equipes/Quartos, Times e lançamentos independe
     is_active: true,
   }
 
-  assert.equal(validateParticipantForm(participantForm, seeded.campJovens.id), '')
+  const room = { ...levi, competition_team_id: azul.id }
+  assert.equal(validateParticipantForm(participantForm, seeded.campJovens.id, [azul], [room]), '')
+  assert.notEqual(validateParticipantForm(participantForm, seeded.campJovens.id, [azul], [{ ...room, competition_team_id: vermelho.id }]), '')
   const participantPayload = buildParticipantPayload(participantForm, seeded.campJovens.id)
   assert.equal(participantPayload.full_name, 'Participante QA Novo')
   assert.equal(participantPayload.tribe_id, levi.id)

@@ -6,6 +6,9 @@ import {
   getScoreCategories,
   getScoreTypeLabel,
 } from '../domain/scoring'
+import { calculateRanking } from '../domain/ranking'
+import { loadCampScoreTotals, readAllPages, totalsAsScoreEntries } from '../features/scores/scoreTotals'
+import { createResultOperation } from '../features/eventOperations'
 import {
   buildScorePayload,
   filterScoreEvents,
@@ -25,12 +28,14 @@ export default function Scores() {
   const [competitionTeams, setCompetitionTeams] = useState([])
   const [participants, setParticipants] = useState([])
   const [events, setEvents] = useState([])
+  const [scoreTotals, setScoreTotals] = useState(null)
   const [form, setForm] = useState(initialScoreForm)
   const [filters, setFilters] = useState(initialScoreFilters)
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const scoreOperation = useRef(createResultOperation(supabase))
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
   const { showError } = useToast()
@@ -43,7 +48,7 @@ export default function Scores() {
 
       const { data: tribesData, error: tribesError } = await supabase
         .from('tribes')
-        .select('id, camp_id, name, color, symbol')
+        .select('id, camp_id, name, color, symbol, competition_team_id')
         .eq('camp_id', activeCampId)
         .order('name')
 
@@ -63,7 +68,7 @@ export default function Scores() {
           .eq('is_active', true)
           .order('full_name')
 
-      const { data: eventsData, error: eventsError } = await supabase
+      const { data: eventsData, error: eventsError } = await readAllPages(() => supabase
         .from('score_events')
         .select(
           `
@@ -80,6 +85,8 @@ export default function Scores() {
           gymkhana_event_id,
           room_inspection_id,
           created_at,
+          created_by,
+          is_voided,
           tribes (
             name,
             color,
@@ -98,24 +105,31 @@ export default function Scores() {
         )
         .eq('camp_id', activeCampId)
         .order('created_at', { ascending: false })
+        .order('id')
+      )
+
+      const { data: totalsData, error: totalsError } = await loadCampScoreTotals(
+        supabase, 'camp_score_totals', activeCampId,
+      )
 
       if (
         tribesError ||
         competitionTeamsError ||
         participantsError ||
-        eventsError
+        eventsError || totalsError
       ) {
         logError('Scores',
           tribesError ||
             competitionTeamsError ||
             participantsError ||
-            eventsError
+            eventsError || totalsError
         )
         if (shouldIgnore) return
         setTribes([])
         setCompetitionTeams([])
         setParticipants([])
         setEvents([])
+        setScoreTotals(null)
         showError('Erro ao carregar pontuações.')
         setLoading(false)
         return
@@ -127,6 +141,7 @@ export default function Scores() {
       setCompetitionTeams(competitionTeamsData || [])
       setParticipants(participantsData || [])
       setEvents(eventsData || [])
+      setScoreTotals(totalsData || [])
       setLoading(false)
     }
 
@@ -142,6 +157,7 @@ export default function Scores() {
       setCompetitionTeams([])
       setParticipants([])
       setEvents([])
+      setScoreTotals(null)
       setLoading(false)
     }, 0)
 
@@ -163,7 +179,7 @@ export default function Scores() {
   }, [activeCampId])
 
   async function reloadEvents() {
-    const { data, error } = await supabase
+    const { data, error } = await readAllPages(() => supabase
       .from('score_events')
       .select(
         `
@@ -180,6 +196,8 @@ export default function Scores() {
         gymkhana_event_id,
         room_inspection_id,
         created_at,
+        created_by,
+        is_voided,
         tribes (
           name,
           color,
@@ -198,6 +216,8 @@ export default function Scores() {
       )
       .eq('camp_id', activeCampId)
       .order('created_at', { ascending: false })
+      .order('id')
+    )
 
     if (error) {
       logError('Scores', error)
@@ -205,6 +225,16 @@ export default function Scores() {
       return
     }
 
+    const { data: totalsData, error: totalsError } = await loadCampScoreTotals(
+      supabase, 'camp_score_totals', activeCampId,
+    )
+    if (totalsError) {
+      logError('Scores', totalsError)
+      setScoreTotals(null)
+      showError('Não foi possível atualizar os saldos.')
+    } else {
+      setScoreTotals(totalsData || [])
+    }
     setEvents(data || [])
   }
 
@@ -265,8 +295,8 @@ export default function Scores() {
     setEditingId(eventItem.id)
 
     setForm({
-      tribe_id: eventItem.tribe_id || '',
-      competition_team_id: eventItem.competition_team_id || '',
+      tribe_id: '',
+      competition_team_id: eventItem.competition_team_id || tribes.find((room) => room.id === eventItem.tribe_id)?.competition_team_id || '',
       participant_id: eventItem.participant_id || '',
       type: eventItem.type,
       category: eventItem.category || '',
@@ -284,30 +314,27 @@ export default function Scores() {
   }
 
   async function handleDelete() {
-    const confirmDelete = await requestConfirmation({
-      title: 'Excluir lançamento',
-      description:
-        'Tem certeza que deseja excluir este lançamento? Essa ação não pode ser desfeita.',
-      confirmLabel: 'Excluir',
-    })
-
-    if (!confirmDelete) return
-
-    const { error } = await supabase
-      .from('score_events')
-      .delete()
-      .eq('id', editingId)
-      .eq('camp_id', activeCampId)
-
-    if (error) {
+    if (savingRef.current) return
+    savingRef.current = true
+    try {
+      const confirmed = await requestConfirmation({
+        title: 'Anular lançamento',
+        description: 'O lançamento ficará no histórico, sem contribuir para o saldo.',
+        confirmLabel: 'Anular',
+      })
+      if (!confirmed) return
+      setSaving(true)
+      await scoreOperation.current.execute({ campId: activeCampId, kind: 'score', action: 'delete', recordId: editingId })
+      setEditingId(null)
+      setForm(initialScoreForm)
+      await reloadEvents()
+    } catch (error) {
       logError('Scores', error)
-      showError('Erro ao excluir lançamento.')
-      return
+      showError('Não foi possível anular o lançamento. Tente novamente.')
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
-
-    setEditingId(null)
-    setForm(initialScoreForm)
-    await reloadEvents()
   }
 
   async function handleSubmit(event) {
@@ -339,29 +366,7 @@ export default function Scores() {
     try {
       const payload = buildScorePayload(form, activeCampId, isLegacyEditing)
 
-      const request = editingId
-        ? supabase
-            .from('score_events')
-            .update(payload)
-            .eq('id', editingId)
-            .eq('camp_id', activeCampId)
-        : supabase.from('score_events').insert(payload)
-
-      const { error } = await request
-
-      if (error) {
-        logError('Scores', error)
-        const message =
-          `${error.message || ''} ${error.details || ''}`.toLowerCase()
-        showError(
-          error.code === '23503' ||
-            error.code === '23514' ||
-            message.includes('foreign key')
-            ? 'O Time selecionado não pertence a este acampamento.'
-            : 'Erro ao salvar lançamento.'
-        )
-        return
-      }
+      await scoreOperation.current.execute({ campId: activeCampId, kind: 'score', action: 'save', recordId: editingId, payload })
 
       setForm(initialScoreForm)
       setEditingId(null)
@@ -378,6 +383,11 @@ export default function Scores() {
   const activeCompetitionTeams = useMemo(() => {
     return competitionTeams.filter((team) => team.status === 'active')
   }, [competitionTeams])
+
+  const standings = useMemo(() => calculateRanking(
+    competitionTeams, totalsAsScoreEntries(scoreTotals || []), participants,
+    { includeInactive: true, scoreTeamIdField: 'competition_team_id', participantTeamIdField: 'competition_team_id' },
+  ), [competitionTeams, scoreTotals, participants])
 
   const formCompetitionTeams = useMemo(() => {
     if (!form.competition_team_id) return activeCompetitionTeams
@@ -439,7 +449,7 @@ export default function Scores() {
             >
               {eventItem.competition_teams.symbol}
             </div>
-            <span>Time: {eventItem.competition_teams.name}</span>
+            <span>Equipe: {eventItem.competition_teams.name}</span>
           </div>
         ) : eventItem.tribes ? (
           <div className="flex items-center justify-end gap-3 md:justify-start">
@@ -449,7 +459,7 @@ export default function Scores() {
             >
               {eventItem.tribes.symbol}
             </div>
-            <span>Equipe/Quarto: {eventItem.tribes.name}</span>
+            <span>Quarto: {eventItem.tribes.name}</span>
           </div>
         ) : (
           <span className="text-zinc-500">Sem destino</span>
@@ -462,8 +472,8 @@ export default function Scores() {
         <span className="text-zinc-400">
           {eventItem.participants?.full_name ||
             (eventItem.competition_team_id
-              ? 'Time inteiro'
-              : 'Equipe/Quarto inteiro')}
+              ? 'Equipe inteira'
+              : 'Quarto inteiro')}
         </span>
       ),
     },
@@ -502,7 +512,7 @@ export default function Scores() {
     {
       key: 'actions',
       label: 'Ações',
-      render: (eventItem) => (
+      render: (eventItem) => eventItem.is_voided ? 'Anulado' : eventItem.gymkhana_event_id || eventItem.room_inspection_id ? 'Gerenciar na origem' : (
         <button
           type="button"
           onClick={() => handleEdit(eventItem)}
@@ -512,6 +522,11 @@ export default function Scores() {
         </button>
       ),
     },
+    {
+      key: 'created_by',
+      label: 'Conta responsável',
+      render: (eventItem) => <span className="break-all text-xs text-zinc-400">{eventItem.created_by || 'Não registrada (legado)'}</span>,
+    },
   ]
 
   return (
@@ -519,13 +534,27 @@ export default function Scores() {
       <PageHeader
         eyebrow="Pontuação"
         title="Lançar Pontos"
-        description="Registro manual de pontos e penalidades dos Times competitivos."
+        description="Registro manual de pontos e penalidades das equipes."
       />
 
       {!activeCampId && (
         <div className="mb-6">
           <ActiveCampNotice message="Selecione um acampamento para lançar e consultar pontuações." />
         </div>
+      )}
+
+      {activeCampId && !loading && scoreTotals !== null && standings.length > 0 && (
+        <section className="mb-6 border-b border-zinc-800 pb-4">
+          <h2 className="text-lg font-bold">Saldo das equipes</h2>
+          <ul className="mt-3 space-y-2 text-sm">
+            {standings.map((team) => (
+              <li key={team.id} className="flex justify-between gap-4">
+                <span>{team.name}{team.status === 'inactive' && ' (inativo)'}</span>
+                <span>{team.total} pontos</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <form
@@ -538,7 +567,7 @@ export default function Scores() {
 
         {!editingId && activeCompetitionTeams.length === 0 && (
           <p className="mt-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
-            Cadastre pelo menos um Time ativo antes de lançar pontuações
+            Cadastre pelo menos uma equipe ativa antes de lançar pontuações
             competitivas.
           </p>
         )}
@@ -551,7 +580,7 @@ export default function Scores() {
               onChange={handleLegacyTribeChange}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
             >
-              <option value="">Selecione a Equipe/Quarto</option>
+              <option value="">Selecione o quarto</option>
               {tribes.map((tribe) => (
                 <option key={tribe.id} value={tribe.id}>
                   {tribe.name}
@@ -565,7 +594,7 @@ export default function Scores() {
               onChange={handleCompetitionTeamChange}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
             >
-              <option value="">Selecione o Time</option>
+              <option value="">Selecione a equipe</option>
               {formCompetitionTeams.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.name}
@@ -583,8 +612,8 @@ export default function Scores() {
           >
             <option value="">
               {isLegacyEditing
-                ? 'Equipe/Quarto inteiro / participante'
-                : 'Time inteiro / participante'}
+                ? 'Quarto inteiro / participante'
+                : 'Equipe inteira / participante'}
             </option>
             {formParticipants.map((participant) => (
               <option key={participant.id} value={participant.id}>
@@ -658,7 +687,7 @@ export default function Scores() {
                 onClick={handleDelete}
                 className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10"
               >
-                Excluir
+                Anular
               </button>
 
               <button
@@ -713,7 +742,7 @@ export default function Scores() {
             name="search"
             value={filters.search}
             onChange={handleFilterChange}
-            placeholder="Buscar por motivo, Time, Equipe/Quarto ou participante"
+            placeholder="Buscar por motivo, equipe, quarto ou participante"
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 xl:col-span-2"
           />
 
@@ -723,7 +752,7 @@ export default function Scores() {
             onChange={handleFilterChange}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Todos os Times</option>
+            <option value="">Todas as equipes</option>
             {activeCompetitionTeams.map((team) => (
               <option key={team.id} value={team.id}>
                 {team.name}
@@ -743,7 +772,7 @@ export default function Scores() {
             }
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Todas as Equipes/Quartos</option>
+            <option value="">Todos os quartos</option>
             {tribes.map((tribe) => (
               <option key={tribe.id} value={tribe.id}>
                 {tribe.name}

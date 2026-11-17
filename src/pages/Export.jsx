@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import { calculateRanking } from '../domain/ranking'
 import { loadExportData } from '../features/export/exportData'
+import { totalsAsScoreEntries } from '../features/scores/scoreTotals'
 import { summarizeScores } from '../domain/scoring'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { supabase } from '../lib/supabase'
@@ -112,7 +113,7 @@ export default function Export() {
     if (tribe) return tribe.name
     if (team === 'A') return settings.team_a_name || 'Equipe A'
     if (team === 'B') return settings.team_b_name || 'Equipe B'
-    return 'Sem time/equipe'
+    return 'Sem equipe'
   }
 
   function getCompetitionTeamStatusLabel(status) {
@@ -124,8 +125,8 @@ export default function Export() {
   function getScoreDestination(eventItem) {
     if (eventItem.competition_team_id || eventItem.competition_teams) {
       return {
-        type: 'Time',
-        label: eventItem.competition_teams?.name || 'Time não encontrado',
+        type: 'Equipe',
+        label: eventItem.competition_teams?.name || 'Equipe não encontrada',
         competitionTeamId: eventItem.competition_team_id || '',
         tribeId: eventItem.tribe_id || '',
         tribeLabel: eventItem.tribes?.name || '',
@@ -134,8 +135,8 @@ export default function Export() {
 
     if (eventItem.tribe_id || eventItem.tribes) {
       return {
-        type: 'Equipe/Quarto',
-        label: eventItem.tribes?.name || 'Equipe/Quarto não encontrada',
+        type: 'Quarto',
+        label: eventItem.tribes?.name || 'Quarto não encontrado',
         competitionTeamId: '',
         tribeId: eventItem.tribe_id || '',
         tribeLabel: eventItem.tribes?.name || '',
@@ -153,8 +154,8 @@ export default function Export() {
 
   function getScoreParticipantLabel(eventItem) {
     if (eventItem.participants?.full_name) return eventItem.participants.full_name
-    if (eventItem.competition_team_id) return 'Time inteiro'
-    if (eventItem.tribe_id) return 'Equipe/Quarto inteiro'
+    if (eventItem.competition_team_id) return 'Equipe inteira'
+    if (eventItem.tribe_id) return 'Quarto inteiro'
     return 'Sem participante'
   }
 
@@ -165,8 +166,8 @@ export default function Export() {
       )
 
       return {
-        type: 'Time',
-        label: team?.name || 'Time não encontrado',
+        type: 'Equipe',
+        label: team?.name || 'Equipe não encontrada',
         competitionTeamId: eventItem.winning_competition_team_id,
         legacyValue: eventItem.winning_team || '',
       }
@@ -184,7 +185,7 @@ export default function Export() {
     const legacyTribe = tribes.find((tribe) => tribe.id === eventItem.winning_team)
 
     return {
-      type: legacyTribe ? 'Equipe/Quarto legado' : 'Legado não encontrado',
+      type: legacyTribe ? 'Quarto legado' : 'Legado não encontrado',
       label: legacyTribe?.name || eventItem.winning_team || 'Sem vencedor',
       competitionTeamId: '',
       legacyValue: eventItem.winning_team || '',
@@ -314,6 +315,7 @@ export default function Export() {
         gymkhana,
         inspections,
         settings,
+        totals,
       } = await loadExportData(selectedCamp.id)
 
       const activeCompetitionTeams = competitionTeams.filter(
@@ -322,9 +324,22 @@ export default function Export() {
       const inactiveCompetitionTeams = competitionTeams.filter(
         (team) => team.status !== 'active',
       )
-      const competitiveEvents = events.filter(
-        (eventItem) => eventItem.competition_team_id,
+      const roomTeamIds = new Map(
+        tribes.map((tribe) => [tribe.id, tribe.competition_team_id]),
       )
+      const competitionTeamIds = new Set(competitionTeams.map((team) => team.id))
+      const getEventTeamId = (eventItem) =>
+        eventItem.competition_team_id || roomTeamIds.get(eventItem.tribe_id)
+      const competitiveEvents = events.filter(
+        (eventItem) =>
+          !eventItem.is_voided && competitionTeamIds.has(getEventTeamId(eventItem)),
+      )
+      const aggregateEntries = totalsAsScoreEntries(totals)
+      const eventCounts = new Map()
+      for (const eventItem of competitiveEvents) {
+        const teamId = getEventTeamId(eventItem)
+        eventCounts.set(teamId, (eventCounts.get(teamId) || 0) + 1)
+      }
       const positiveEvents = competitiveEvents.filter(
         (eventItem) => Number(eventItem.points) > 0,
       )
@@ -337,17 +352,21 @@ export default function Export() {
         positivePoints: totalPositivePoints,
         penaltyPoints: totalPenaltyPoints,
         total: totalBalance,
-      } = summarizeScores(competitiveEvents)
+      } = summarizeScores(aggregateEntries)
       const ranking = calculateRanking(
         competitionTeams,
-        competitiveEvents,
+        aggregateEntries,
         participants,
         {
           includeInactive: true,
           scoreTeamIdField: 'competition_team_id',
           participantTeamIdField: 'competition_team_id',
         },
-      )
+      ).map((team) => ({
+        ...team,
+        isActive: team.status === 'active',
+        eventsCount: eventCounts.get(team.id) || 0,
+      }))
       const activeRanking = ranking.filter((team) => team.isActive)
       const leader = activeRanking[0]
       const legacyGymkhanaParticipants = participants.filter(
@@ -384,10 +403,10 @@ export default function Export() {
             value: formatDateOnly(selectedCamp.end_date),
           },
           { metric: 'Data da exportação', value: formatDate(new Date()) },
-          { metric: 'Times cadastrados', value: competitionTeams.length },
-          { metric: 'Times ativos', value: activeCompetitionTeams.length },
-          { metric: 'Times inativos', value: inactiveCompetitionTeams.length },
-          { metric: 'Equipes/Quartos cadastrados', value: tribes.length },
+          { metric: 'Equipes cadastradas', value: competitionTeams.length },
+          { metric: 'Equipes ativas', value: activeCompetitionTeams.length },
+          { metric: 'Equipes inativas', value: inactiveCompetitionTeams.length },
+          { metric: 'Quartos cadastrados', value: tribes.length },
           {
             metric: 'Participantes cadastrados',
             value: participants.length,
@@ -412,9 +431,9 @@ export default function Export() {
           { metric: 'Pontos positivos competitivos', value: totalPositivePoints },
           { metric: 'Pontos perdidos competitivos', value: totalPenaltyPoints },
           { metric: 'Saldo competitivo geral', value: totalBalance },
-          { metric: 'Time líder atual', value: leader?.name || '-' },
+          { metric: 'Equipe líder atual', value: leader?.name || '-' },
           {
-            metric: 'Saldo do Time líder',
+            metric: 'Saldo da equipe líder',
             value: leader ? leader.total : '-',
           },
           {
@@ -426,12 +445,12 @@ export default function Export() {
             value: legacyGymkhanaParticipants.length,
           },
           {
-            metric: 'Gincanas cadastradas',
-            value: gymkhanaEvents.length,
+            metric: 'Gincanas válidas',
+            value: gymkhanaEvents.filter((eventItem) => !eventItem.deleted_at).length,
           },
           {
-            metric: 'Inspeções realizadas',
-            value: inspections.length,
+            metric: 'Inspeções válidas',
+            value: inspections.filter((inspection) => !inspection.deleted_at).length,
           },
         ]
       )
@@ -441,8 +460,8 @@ export default function Export() {
         'Ranking Atual',
         [
           { header: 'Posição', key: 'position' },
-          { header: 'ID do Time', key: 'id' },
-          { header: 'Time', key: 'name' },
+          { header: 'ID da Equipe', key: 'id' },
+          { header: 'Equipe', key: 'name' },
           { header: 'Símbolo', key: 'symbol' },
           { header: 'Cor', key: 'color' },
           { header: 'Líder/Responsável', key: 'leader_name' },
@@ -475,7 +494,7 @@ export default function Export() {
 
       addSheet(
         workbook,
-        'Times',
+        'Equipes',
         [
           { header: 'ID', key: 'id' },
           { header: 'Nome', key: 'name' },
@@ -510,14 +529,16 @@ export default function Export() {
 
       addSheet(
         workbook,
-        'Equipes-Quartos',
+        'Quartos',
         [
           { header: 'ID', key: 'id' },
           { header: 'Nome', key: 'name' },
           { header: 'Símbolo', key: 'symbol' },
           { header: 'Cor', key: 'color' },
           { header: 'Tipo de quarto', key: 'room_type' },
-          { header: 'Quarto', key: 'room_name' },
+          { header: 'ID da Equipe', key: 'competition_team_id' },
+          { header: 'Equipe', key: 'competition_team_name' },
+          { header: 'Identificação do quarto', key: 'room_name' },
           { header: 'Responsável', key: 'leader_name' },
           { header: 'Participantes', key: 'participantsCount' },
           { header: 'Participantes ativos', key: 'activeParticipantsCount' },
@@ -534,6 +555,10 @@ export default function Export() {
             symbol: tribe.symbol,
             color: tribe.color,
             room_type: tribe.room_type || '',
+            competition_team_id: tribe.competition_team_id || '',
+            competition_team_name: competitionTeams.find(
+              (team) => team.id === tribe.competition_team_id,
+            )?.name || '',
             room_name: tribe.room_name || '',
             leader_name: tribe.leader_name || '',
             participantsCount: tribeParticipants.length,
@@ -562,11 +587,11 @@ export default function Export() {
           { header: 'Equipe da gincana legada', key: 'gymkhana_team' },
           { header: 'Telefone', key: 'phone' },
           { header: 'Telefone responsável', key: 'guardian_phone' },
-          { header: 'ID da Equipe/Quarto', key: 'tribe_id' },
-          { header: 'Equipe/Quarto', key: 'tribe_name' },
-          { header: 'ID do Time', key: 'competition_team_id' },
-          { header: 'Time', key: 'competition_team_name' },
-          { header: 'Status do Time', key: 'competition_team_status' },
+          { header: 'ID do Quarto', key: 'tribe_id' },
+          { header: 'Quarto', key: 'tribe_name' },
+          { header: 'ID da Equipe', key: 'competition_team_id' },
+          { header: 'Equipe', key: 'competition_team_name' },
+          { header: 'Status da Equipe', key: 'competition_team_status' },
           { header: 'Diretoria', key: 'is_board_member' },
           { header: 'Status', key: 'is_active' },
           { header: 'Restrição alimentar', key: 'food_restriction' },
@@ -616,10 +641,10 @@ export default function Export() {
           { header: 'Data', key: 'created_at' },
           { header: 'Tipo do destino', key: 'destination_type' },
           { header: 'Destino', key: 'destination_name' },
-          { header: 'ID do Time', key: 'competition_team_id' },
-          { header: 'Time', key: 'competition_team_name' },
-          { header: 'ID da Equipe/Quarto', key: 'tribe_id' },
-          { header: 'Equipe/Quarto', key: 'tribe_name' },
+          { header: 'ID da Equipe', key: 'competition_team_id' },
+          { header: 'Equipe', key: 'competition_team_name' },
+          { header: 'ID do Quarto', key: 'tribe_id' },
+          { header: 'Quarto', key: 'tribe_name' },
           { header: 'ID do participante', key: 'participant_id' },
           { header: 'Participante', key: 'participant_name' },
           { header: 'Tipo', key: 'type' },
@@ -628,6 +653,11 @@ export default function Export() {
           { header: 'Motivo', key: 'reason' },
           { header: 'Observações', key: 'notes' },
           { header: 'ID da gincana', key: 'gymkhana_event_id' },
+          { header: 'ID da inspeção', key: 'room_inspection_id' },
+          { header: 'Status', key: 'status' },
+          { header: 'Autor (ID)', key: 'created_by' },
+          { header: 'Anulado em', key: 'voided_at' },
+          { header: 'Anulado por (ID)', key: 'voided_by' },
         ],
         events.map((eventItem) => {
           const destination = getScoreDestination(eventItem)
@@ -640,7 +670,7 @@ export default function Export() {
             competition_team_id: destination.competitionTeamId,
             competition_team_name:
               eventItem.competition_teams?.name ||
-              (destination.type === 'Time' ? destination.label : ''),
+              (destination.type === 'Equipe' ? destination.label : ''),
             tribe_id: destination.tribeId,
             tribe_name: destination.tribeLabel,
             participant_id: eventItem.participant_id || '',
@@ -651,6 +681,11 @@ export default function Export() {
             reason: eventItem.reason || '',
             notes: eventItem.notes || '',
             gymkhana_event_id: eventItem.gymkhana_event_id || '',
+            room_inspection_id: eventItem.room_inspection_id || '',
+            status: eventItem.is_voided ? 'Anulado' : 'Válido',
+            created_by: eventItem.created_by || 'Não registrado (legado)',
+            voided_at: formatDate(eventItem.voided_at),
+            voided_by: eventItem.voided_by || '',
           }
         })
       )
@@ -720,16 +755,45 @@ export default function Export() {
           { header: 'ID', key: 'id' },
           { header: 'Data', key: 'created_at' },
           { header: 'Prova', key: 'title' },
-          { header: 'Tipo do vencedor', key: 'winner_type' },
-          { header: 'Time vencedor', key: 'winner_name' },
-          { header: 'ID do Time vencedor', key: 'competition_team_id' },
+          { header: 'Tipo do resultado', key: 'winner_type' },
+          { header: 'Equipe premiada', key: 'winner_name' },
+          { header: 'ID da Equipe premiada', key: 'competition_team_id' },
           { header: 'Vencedor legado', key: 'legacy_winning_team' },
           { header: 'Pontos do resultado', key: 'points_per_member' },
-          { header: 'Participantes ativos do vencedor', key: 'members_count' },
-          { header: 'Total distribuído', key: 'total_distributed' },
+          { header: 'Participantes ativos atuais da equipe', key: 'members_count' },
+          { header: 'Total do prêmio/resultado', key: 'total_distributed' },
           { header: 'Observações', key: 'notes' },
+          { header: 'Status', key: 'status' },
+          { header: 'Anulado em', key: 'deleted_at' },
         ],
-        gymkhanaEvents.map((eventItem) => {
+        gymkhanaEvents.flatMap((eventItem) => {
+          if (Array.isArray(eventItem.awards)) {
+            const awards = eventItem.awards.length ? eventItem.awards : [{}]
+            return awards.map((award) => ({
+              id: eventItem.id,
+              created_at: formatDate(eventItem.created_at),
+              title: eventItem.title,
+              winner_type: 'Premiação por equipe',
+              winner_name: award.competition_team_id
+                ? competitionTeams.find(
+                    (team) => team.id === award.competition_team_id,
+                  )?.name || 'Equipe não encontrada'
+                : 'Sem premiação',
+              competition_team_id: award.competition_team_id || '',
+              legacy_winning_team: '',
+              points_per_member: award.points ?? '',
+              members_count: participants.filter(
+                (participant) =>
+                  participant.is_active &&
+                  participant.competition_team_id === award.competition_team_id,
+              ).length,
+              total_distributed: award.points ?? '',
+              notes: eventItem.notes || '',
+              status: eventItem.deleted_at ? 'Anulado' : 'Válido',
+              deleted_at: formatDate(eventItem.deleted_at),
+            }))
+          }
+
           const winner = getGymkhanaWinner(
             eventItem,
             competitionTeams,
@@ -756,6 +820,8 @@ export default function Export() {
               participants
             ),
             notes: eventItem.notes || '',
+            status: eventItem.deleted_at ? 'Anulado' : 'Válido',
+            deleted_at: formatDate(eventItem.deleted_at),
           }
         })
       )
@@ -766,15 +832,17 @@ export default function Export() {
         [
           { header: 'ID', key: 'id' },
           { header: 'Data', key: 'created_at' },
-          { header: 'Equipe/Quarto', key: 'tribe_name' },
+          { header: 'Quarto', key: 'tribe_name' },
           { header: 'Tipo de quarto', key: 'room_type' },
-          { header: 'Quarto', key: 'room_name' },
+          { header: 'Identificação do quarto', key: 'room_name' },
           { header: 'Dia', key: 'inspection_day' },
           { header: 'Período', key: 'inspection_period' },
           { header: 'Tipo', key: 'type' },
           { header: 'Pontos', key: 'points' },
           { header: 'Possui foto', key: 'has_photo' },
           { header: 'Observações', key: 'notes' },
+          { header: 'Status', key: 'status' },
+          { header: 'Anulado em', key: 'deleted_at' },
         ],
         inspections.map((inspection) => ({
           id: inspection.id,
@@ -788,14 +856,16 @@ export default function Export() {
           points: inspection.points || 0,
           has_photo: inspection.has_photo ? 'Sim' : 'Não',
           notes: inspection.notes || '',
+          status: inspection.deleted_at ? 'Anulado' : 'Válido',
+          deleted_at: formatDate(inspection.deleted_at),
         }))
       )
 
       addSheet(
         workbook,
-        'Estatísticas por Time',
+        'Estatísticas por Equipe',
         [
-          { header: 'Time', key: 'name' },
+          { header: 'Equipe', key: 'name' },
           { header: 'Líder/Responsável', key: 'leader_name' },
           { header: 'Participantes ativos', key: 'participantsCount' },
           { header: 'Pontos positivos', key: 'positivePoints' },
@@ -876,7 +946,7 @@ export default function Export() {
           </h2>
 
           <p className="mt-2 text-sm text-zinc-400">
-            A exportação inclui ranking dos Times, Times, Equipes/Quartos,
+            A exportação inclui ranking das Equipes, Equipes, Quartos,
             participantes, pontuações, histórico, gincana e inspeções apenas do
             acampamento escolhido.
           </p>
@@ -907,10 +977,10 @@ export default function Export() {
         <h2 className="text-xl font-bold">Relatório completo em Excel</h2>
 
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
-          O arquivo inclui dados do acampamento, resumo geral, ranking dos
-          Times, Times, Equipes/Quartos, participantes, histórico completo,
+          O arquivo inclui dados do acampamento, resumo geral, ranking das
+          Equipes, Equipes, Quartos, participantes, histórico completo,
           pontos positivos, penalidades, gincana, inspeções de quartos e
-          estatísticas por Time.
+          estatísticas por Equipe.
         </p>
 
         <button

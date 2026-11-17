@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { calculateRanking } from '../domain/ranking'
+import { loadCampScoreTotals, readAllPages, totalsAsScoreEntries } from '../features/scores/scoreTotals'
 import { supabase } from '../lib/supabase'
 import { isValidSlug } from '../utils/slug'
 import { logError } from '../utils/logger'
@@ -52,28 +53,22 @@ export default function PublicCampRanking() {
         return
       }
 
-      const { data: teamsData, error: teamsError } = await supabase
+      const { data: teamsData, error: teamsError } = await readAllPages(() => supabase
         .from('public_ranking_competition_teams')
         .select('id, name, color, symbol')
         .eq('camp_id', campData.id)
         .order('name')
+        .order('id')
+      )
 
-      const { data: eventsData, error: eventsError } = await supabase
-        .from('public_ranking_competition_score_events')
-        .select('competition_team_id, points')
-        .eq('camp_id', campData.id)
-
-      const { data: participantsData, error: participantsError } =
-        await supabase
-          .from('public_ranking_competition_participants')
-          .select('competition_team_id, is_active')
-          .eq('camp_id', campData.id)
-          .eq('is_active', true)
+      const { data: totalsData, error: eventsError } = await loadCampScoreTotals(
+        supabase, 'public_camp_score_totals', campData.id,
+      )
 
       if (shouldIgnore) return
 
-      if (teamsError || eventsError || participantsError) {
-        logError('PublicCampRanking', teamsError || eventsError || participantsError)
+      if (teamsError || eventsError) {
+        logError('PublicCampRanking', teamsError || eventsError)
         setNotFound(true)
         setLoading(false)
         return
@@ -83,14 +78,17 @@ export default function PublicCampRanking() {
       setRanking(
         calculateRanking(
           teamsData || [],
-          eventsData || [],
-          participantsData || [],
+          totalsAsScoreEntries(totalsData || []),
+          [],
           {
-            includeInactive: false,
+            includeInactive: true,
             scoreTeamIdField: 'competition_team_id',
             participantTeamIdField: 'competition_team_id',
           },
-        ),
+        ).map((team) => ({
+          ...team,
+          participantsCount: Number(totalsData?.find((total) => total.competition_team_id === team.id)?.participants_count || 0),
+        })),
       )
       setLoading(false)
     }
@@ -130,7 +128,7 @@ export default function PublicCampRanking() {
               </div>
             ) : (
               <p className="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-400 md:text-base">
-                Ranking público dos times do acampamento.
+                Ranking público das equipes do acampamento.
               </p>
             )}
           </div>
@@ -175,11 +173,10 @@ export default function PublicCampRanking() {
           </div>
         ) : ranking.length === 0 ? (
           <div className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-            <h2 className="text-2xl font-bold">Nenhum time ativo ainda</h2>
+            <h2 className="text-2xl font-bold">Nenhuma equipe ativa ainda</h2>
 
             <p className="mt-3 text-zinc-400">
-              Um time aparece no ranking quando possuir pelo menos um
-              participante ativo.
+              As equipes ativas do acampamento aparecem aqui, mesmo sem participantes ou pontos.
             </p>
           </div>
         ) : (
@@ -235,7 +232,7 @@ export default function PublicCampRanking() {
                 <thead className="bg-zinc-950">
                   <tr className="text-left text-sm">
                     <th className="px-6 py-5">Posição</th>
-                    <th className="px-6 py-5">Time</th>
+                    <th className="px-6 py-5">Equipe</th>
                     <th className="px-6 py-5">Integrantes</th>
                     <th className="px-6 py-5">Pontos +</th>
                     <th className="px-6 py-5">Penalidades</th>

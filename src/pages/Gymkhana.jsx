@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
-import { createOperationGuard, isValidOperationPoints } from '../features/scoringOperations'
+import { Plus, Trash2 } from 'lucide-react'
+import { createOperationGuard } from '../features/scoringOperations'
+import {
+  createResultOperation,
+  getGymkhanaAwards,
+  validateGymkhanaAwards,
+} from '../features/eventOperations'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
@@ -11,8 +17,7 @@ import { logError } from '../utils/logger'
 
 const initialForm = {
   title: '',
-  winning_competition_team_id: '',
-  points_per_member: '',
+  awards: [],
   notes: '',
 }
 
@@ -32,99 +37,106 @@ export default function Gymkhana() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const operationGuard = useRef(createOperationGuard())
+  const resultOperation = useRef(createResultOperation(supabase))
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
   const { showError } = useToast()
 
-  const loadData = useCallback(async (shouldIgnore = () => false) => {
-    setLoading(true)
+  const loadData = useCallback(
+    async (shouldIgnore = () => false) => {
+      setLoading(true)
 
-    if (!activeCampId) {
-      if (shouldIgnore()) return
-      setCompetitionTeams([])
-      setLegacyTribes([])
-      setParticipants([])
-      setHistory([])
-      setSettings(legacySettings)
-      setLoading(false)
-      return
-    }
+      if (!activeCampId) {
+        if (shouldIgnore()) return
+        setCompetitionTeams([])
+        setLegacyTribes([])
+        setParticipants([])
+        setHistory([])
+        setSettings(legacySettings)
+        setLoading(false)
+        return
+      }
 
-    const { data: competitionTeamsData, error: competitionTeamsError } =
-      await supabase
-        .from('competition_teams')
-        .select('id, name, color, symbol, leader_name, status, camp_id')
-        .eq('camp_id', activeCampId)
-        .eq('status', 'active')
-        .order('name')
+      const { data: competitionTeamsData, error: competitionTeamsError } =
+        await supabase
+          .from('competition_teams')
+          .select('id, name, color, symbol, leader_name, status, camp_id')
+          .eq('camp_id', activeCampId)
+          .order('name')
 
-    const { data: legacyTribesData, error: legacyTribesError } = await supabase
-      .from('tribes')
-      .select('id, name, color, symbol')
-      .eq('camp_id', activeCampId)
-      .order('name')
+      const { data: legacyTribesData, error: legacyTribesError } =
+        await supabase
+          .from('tribes')
+          .select('id, name, color, symbol, competition_team_id')
+          .eq('camp_id', activeCampId)
+          .order('name')
 
-    const { data: participantsData, error: participantsError } = await supabase
-      .from('participants')
-      .select(
-        `
+      const { data: participantsData, error: participantsError } =
+        await supabase
+          .from('participants')
+          .select(
+            `
         id,
         full_name,
         competition_team_id,
         is_active
       `
-      )
-      .eq('camp_id', activeCampId)
-      .eq('is_active', true)
-      .order('full_name')
+          )
+          .eq('camp_id', activeCampId)
+          .eq('is_active', true)
+          .order('full_name')
 
-    const { data: historyData, error: historyError } = await supabase
-      .from('gymkhana_events')
-      .select(
-        'id, camp_id, title, winning_team, winning_competition_team_id, points_per_member, notes, created_at',
-      )
-      .eq('camp_id', activeCampId)
-      .order('created_at', { ascending: false })
+      const { data: historyData, error: historyError } = await supabase
+        .from('gymkhana_events')
+        .select(
+          'id, camp_id, title, awards, winning_team, winning_competition_team_id, points_per_member, notes, created_at'
+        )
+        .eq('camp_id', activeCampId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
 
-    const { data: settingsRows, error: settingsError } = await supabase
-      .from('gymkhana_settings')
-      .select('team_a_name, team_b_name')
-      .eq('camp_id', activeCampId)
-      .limit(1)
+      const { data: settingsRows, error: settingsError } = await supabase
+        .from('gymkhana_settings')
+        .select('team_a_name, team_b_name')
+        .eq('camp_id', activeCampId)
+        .limit(1)
 
-    if (
-      competitionTeamsError ||
-      legacyTribesError ||
-      participantsError ||
-      historyError ||
-      settingsError
-    ) {
-      logError('Gymkhana',
+      if (
         competitionTeamsError ||
-          legacyTribesError ||
-          participantsError ||
-          historyError ||
-          settingsError
-      )
+        legacyTribesError ||
+        participantsError ||
+        historyError ||
+        settingsError
+      ) {
+        logError(
+          'Gymkhana',
+          competitionTeamsError ||
+            legacyTribesError ||
+            participantsError ||
+            historyError ||
+            settingsError
+        )
+        if (shouldIgnore()) return
+        setLoading(false)
+        return
+      }
+
       if (shouldIgnore()) return
+
+      const settingsData = settingsRows?.[0]
+
+      setCompetitionTeams(competitionTeamsData || [])
+      setLegacyTribes(legacyTribesData || [])
+      setParticipants(participantsData || [])
+      setHistory(historyData || [])
+      setSettings({
+        team_a_name: settingsData?.team_a_name || legacySettings.team_a_name,
+        team_b_name: settingsData?.team_b_name || legacySettings.team_b_name,
+      })
       setLoading(false)
-      return
-    }
-
-    if (shouldIgnore()) return
-
-    const settingsData = settingsRows?.[0]
-
-    setCompetitionTeams(competitionTeamsData || [])
-    setLegacyTribes(legacyTribesData || [])
-    setParticipants(participantsData || [])
-    setHistory(historyData || [])
-    setSettings({
-      team_a_name: settingsData?.team_a_name || legacySettings.team_a_name,
-      team_b_name: settingsData?.team_b_name || legacySettings.team_b_name,
-    })
-    setLoading(false)
-  }, [activeCampId])
+    },
+    [activeCampId]
+  )
 
   useEffect(() => {
     let shouldIgnore = false
@@ -192,23 +204,13 @@ export default function Gymkhana() {
     }))
   }
 
-  async function createScoreEvent(gymkhanaEventId, points, winningTeamName) {
-    const { error } = await supabase.from('score_events').insert({
-      tribe_id: null,
-      competition_team_id: form.winning_competition_team_id,
-      participant_id: null,
-      type: 'POINT',
-      category: 'Gincana',
-      points,
-      reason: form.title.trim(),
-      notes: form.notes.trim()
-        ? `${winningTeamName} | ${form.notes.trim()}`
-        : winningTeamName,
-      gymkhana_event_id: gymkhanaEventId,
-      camp_id: activeCampId,
-    })
-
-    if (error) throw error
+  function handleAwardChange(teamId, points) {
+    setForm((current) => ({
+      ...current,
+      awards: current.awards.map((award) =>
+        award.competition_team_id === teamId ? { ...award, points } : award
+      ),
+    }))
   }
 
   async function handleSubmit(event) {
@@ -219,30 +221,14 @@ export default function Gymkhana() {
       return
     }
 
-    if (competitionTeams.length < 2) {
-      showError('Cadastre pelo menos dois times para lançar resultados da gincana.')
-      return
-    }
-
     if (!form.title.trim()) {
       showError('Informe o nome da prova.')
       return
     }
 
-    if (!form.winning_competition_team_id) {
-      showError('Selecione o time vencedor.')
-      return
-    }
-
-    const winningTeam = getWinningTeam(form.winning_competition_team_id)
-
-    if (!winningTeam) {
-      showError('Selecione um time vencedor válido.')
-      return
-    }
-
-    if (!isValidOperationPoints(form.points_per_member)) {
-      showError('Informe uma pontuação válida para o resultado.')
+    const awardsError = validateGymkhanaAwards(form.awards, competitionTeams)
+    if (awardsError) {
+      showError(awardsError)
       return
     }
 
@@ -250,56 +236,29 @@ export default function Gymkhana() {
     setSaving(true)
 
     try {
-      const points = Number(form.points_per_member)
-      const winningCompetitionTeamId = form.winning_competition_team_id
-      const winningTeamName = getWinningTeamName({
-        winning_competition_team_id: winningCompetitionTeamId,
+      await resultOperation.current.execute({
+        campId: activeCampId,
+        kind: 'gymkhana',
+        action: 'save',
+        recordId: editingId,
+        payload: {
+          title: form.title.trim(),
+          notes: form.notes.trim() || null,
+          awards: form.awards.map((award) => ({
+            ...award,
+            points: Number(award.points),
+          })),
+        },
       })
-      const eventPayload = {
-        title: form.title.trim(),
-        winning_team: winningCompetitionTeamId,
-        winning_competition_team_id: winningCompetitionTeamId,
-        points_per_member: points,
-        notes: form.notes.trim() || null,
-        camp_id: activeCampId,
-      }
-
-      if (editingId) {
-        const { error: deleteScoresError } = await supabase
-          .from('score_events')
-          .delete()
-          .eq('gymkhana_event_id', editingId)
-          .eq('camp_id', activeCampId)
-
-        if (deleteScoresError) throw deleteScoresError
-
-        const { error: updateEventError } = await supabase
-          .from('gymkhana_events')
-          .update(eventPayload)
-          .eq('id', editingId)
-          .eq('camp_id', activeCampId)
-
-        if (updateEventError) throw updateEventError
-
-        await createScoreEvent(editingId, points, winningTeamName)
-      } else {
-        const { data: gymkhanaEvent, error: createEventError } = await supabase
-          .from('gymkhana_events')
-          .insert(eventPayload)
-          .select('id')
-          .single()
-
-        if (createEventError) throw createEventError
-
-        await createScoreEvent(gymkhanaEvent.id, points, winningTeamName)
-      }
 
       setForm(initialForm)
       setEditingId(null)
       await loadData()
     } catch (error) {
       logError('Gymkhana', error)
-      showError('Operação incompleta. Confira a gincana e a pontuação antes de tentar novamente.')
+      showError(
+        'Não foi possível confirmar a operação. Tente novamente sem alterar os dados para repetir a mesma tentativa.'
+      )
     } finally {
       operationGuard.current.release()
       setSaving(false)
@@ -307,13 +266,12 @@ export default function Gymkhana() {
   }
 
   function handleEdit(eventItem) {
+    if (saving) return
     setEditingId(eventItem.id)
 
     setForm({
       title: eventItem.title || '',
-      winning_competition_team_id:
-        eventItem.winning_competition_team_id || '',
-      points_per_member: eventItem.points_per_member || '',
+      awards: getGymkhanaAwards(eventItem).map((award) => ({ ...award })),
       notes: eventItem.notes || '',
     })
 
@@ -326,37 +284,25 @@ export default function Gymkhana() {
   }
 
   async function handleDelete(eventItem) {
+    if (!activeCampId) return
     if (!operationGuard.current.acquire()) return
-    const confirmDelete = await requestConfirmation({
-      title: 'Excluir lançamento da gincana',
-      description:
-        'Tem certeza que deseja excluir este lançamento da gincana? As pontuações vinculadas também serão removidas.',
-      confirmLabel: 'Excluir',
-    })
-
-    if (!confirmDelete) {
-      operationGuard.current.release()
-      return
-    }
-
     setSaving(true)
 
     try {
-      const { error: deleteScoresError } = await supabase
-        .from('score_events')
-        .delete()
-        .eq('gymkhana_event_id', eventItem.id)
-        .eq('camp_id', activeCampId)
+      const confirmDelete = await requestConfirmation({
+        title: 'Excluir lançamento da gincana',
+        description:
+          'Tem certeza que deseja excluir este lançamento da gincana? As pontuações vinculadas serão anuladas, preservando o histórico.',
+        confirmLabel: 'Excluir',
+      })
+      if (!confirmDelete) return
 
-      if (deleteScoresError) throw deleteScoresError
-
-      const { error: deleteHistoryError } = await supabase
-        .from('gymkhana_events')
-        .delete()
-        .eq('id', eventItem.id)
-        .eq('camp_id', activeCampId)
-
-      if (deleteHistoryError) throw deleteHistoryError
+      await resultOperation.current.execute({
+        campId: activeCampId,
+        kind: 'gymkhana',
+        action: 'delete',
+        recordId: eventItem.id,
+      })
 
       if (editingId === eventItem.id) {
         setEditingId(null)
@@ -366,7 +312,9 @@ export default function Gymkhana() {
       await loadData()
     } catch (error) {
       logError('Gymkhana', error)
-      showError('Exclusão incompleta. Confira a gincana e a pontuação antes de tentar novamente.')
+      showError(
+        'Não foi possível confirmar a exclusão. Tente novamente para repetir a mesma tentativa.'
+      )
     } finally {
       operationGuard.current.release()
       setSaving(false)
@@ -464,15 +412,48 @@ export default function Gymkhana() {
     },
     {
       key: 'team',
-      label: 'Time vencedor',
-      render: (eventItem) => renderTeamBadge(eventItem),
+      label: 'Equipes / prêmios',
+      render: (eventItem) => {
+        const awards = getGymkhanaAwards(eventItem)
+        if (!awards.length) return renderTeamBadge(eventItem)
+        return (
+          <div className="space-y-2">
+            {awards.map((award) => (
+              <div
+                key={award.competition_team_id}
+                className="flex flex-wrap items-center gap-2"
+              >
+                {renderTeamBadge({
+                  winning_competition_team_id: award.competition_team_id,
+                })}
+                <strong
+                  className={
+                    Number(award.points) < 0 ? 'text-red-400' : 'text-green-400'
+                  }
+                >
+                  {Number(award.points) > 0 ? '+' : ''}
+                  {award.points}
+                </strong>
+              </div>
+            ))}
+          </div>
+        )
+      },
     },
     {
       key: 'points',
       label: 'Pontos',
       render: (eventItem) => (
-        <strong className="text-green-400">
-          +{eventItem.points_per_member}
+        <strong
+          className={
+            Number(eventItem.points_per_member) < 0
+              ? 'text-red-400'
+              : 'text-green-400'
+          }
+        >
+          {getGymkhanaAwards(eventItem).length
+            ? '-'
+            : `${Number(eventItem.points_per_member) > 0 ? '+' : ''}${eventItem.points_per_member}`}
         </strong>
       ),
     },
@@ -490,6 +471,7 @@ export default function Gymkhana() {
         <button
           type="button"
           onClick={() => handleEdit(eventItem)}
+          disabled={saving}
           className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
         >
           Editar
@@ -498,7 +480,10 @@ export default function Gymkhana() {
     },
   ]
 
-  const hasEnoughTeams = competitionTeams.length >= 2
+  const availableTeams = competitionTeams.filter(
+    (team) => team.status === 'active'
+  )
+  const hasEnoughTeams = competitionTeams.length > 0
 
   return (
     <section>
@@ -520,14 +505,8 @@ export default function Gymkhana() {
         </p>
       )}
 
-      {activeCampId && competitionTeams.length === 1 && (
-        <p className="mb-6 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
-          Cadastre pelo menos mais um time para disputar a gincana.
-        </p>
-      )}
-
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {competitionTeams.map(renderTeamCard)}
+        {availableTeams.map(renderTeamCard)}
       </div>
 
       <form
@@ -540,83 +519,146 @@ export default function Gymkhana() {
             : 'Lançar resultado da gincana'}
         </h2>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <input
-            name="title"
-            value={form.title}
-            onChange={handleChange}
-            placeholder="Nome da prova"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 xl:col-span-2"
-          />
+        <fieldset disabled={saving}>
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <input
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              placeholder="Nome da prova"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 xl:col-span-2"
+            />
+          </div>
 
-          <select
-            name="winning_competition_team_id"
-            value={form.winning_competition_team_id}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            <option value="">Time vencedor</option>
-            {competitionTeams.map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
+          <fieldset disabled={saving} className="mt-4 space-y-3">
+            <legend className="text-sm font-semibold text-zinc-300">
+              Prêmios por equipe
+            </legend>
+            {form.awards.map((award) => (
+              <div
+                key={award.competition_team_id}
+                className="flex flex-wrap items-center gap-3"
+              >
+                <label className="min-w-0 flex-1 text-sm">
+                  {getWinningTeamName(award.competition_team_id)}
+                  <input
+                    type="number"
+                    step="1"
+                    value={award.points}
+                    onChange={(event) =>
+                      handleAwardChange(
+                        award.competition_team_id,
+                        event.target.value
+                      )
+                    }
+                    aria-label={`Pontos de ${getWinningTeamName(award.competition_team_id)}`}
+                    className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+                  />
+                </label>
+                <button
+                  type="button"
+                  title="Remover prêmio"
+                  aria-label={`Remover prêmio de ${getWinningTeamName(award.competition_team_id)}`}
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      awards: current.awards.filter(
+                        (item) =>
+                          item.competition_team_id !== award.competition_team_id
+                      ),
+                    }))
+                  }
+                  className="rounded-lg border border-zinc-700 p-3 text-red-400"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
             ))}
-          </select>
+            <div className="flex items-center gap-3">
+              <Plus size={18} aria-hidden="true" />
+              <select
+                value=""
+                aria-label="Adicionar equipe premiada"
+                onChange={(event) => {
+                  const teamId = event.target.value
+                  if (!teamId) return
+                  setForm((current) =>
+                    current.awards.some(
+                      (award) => award.competition_team_id === teamId
+                    )
+                      ? current
+                      : {
+                          ...current,
+                          awards: [
+                            ...current.awards,
+                            { competition_team_id: teamId, points: '' },
+                          ],
+                        }
+                  )
+                }}
+                className="min-w-0 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+              >
+                <option value="">Adicionar equipe premiada</option>
+                {availableTeams
+                  .filter(
+                    (team) =>
+                      !form.awards.some(
+                        (award) => award.competition_team_id === team.id
+                      )
+                  )
+                  .map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </fieldset>
 
-          <input
-            name="points_per_member"
-            value={form.points_per_member}
+          <textarea
+            name="notes"
+            value={form.notes}
             onChange={handleChange}
-            type="number"
-            min="1"
-            placeholder="Pontos do resultado"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            placeholder="Observações"
+            className="mt-4 min-h-24 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           />
-        </div>
 
-        <textarea
-          name="notes"
-          value={form.notes}
-          onChange={handleChange}
-          placeholder="Observações"
-          className="mt-4 min-h-24 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-        />
+          <div className="mt-6 flex flex-col justify-end gap-3 sm:flex-row">
+            {editingId && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleDeleteEditing}
+                  disabled={saving || !activeCampId}
+                  className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Excluir
+                </button>
 
-        <div className="mt-6 flex flex-col justify-end gap-3 sm:flex-row">
-          {editingId && (
-            <>
-              <button
-                type="button"
-                onClick={handleDeleteEditing}
-                disabled={saving || !activeCampId}
-                className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Excluir
-              </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                  className="rounded-xl border border-zinc-700 px-6 py-3 font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar edição
+                </button>
+              </>
+            )}
 
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                disabled={saving}
-                className="rounded-xl border border-zinc-700 px-6 py-3 font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancelar edição
-              </button>
-            </>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving || !activeCampId || !hasEnoughTeams}
-            className="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving
-              ? 'Salvando...'
-              : editingId
-                ? 'Salvar alterações'
-                : 'Lançar pontos da gincana'}
-          </button>
-        </div>
+            <button
+              type="submit"
+              disabled={saving || !activeCampId || !hasEnoughTeams}
+              className="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving
+                ? 'Salvando...'
+                : editingId
+                  ? 'Salvar alterações'
+                  : 'Lançar pontos da gincana'}
+            </button>
+          </div>
+        </fieldset>
       </form>
 
       <div className="mt-8">

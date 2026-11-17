@@ -2,6 +2,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck,
+  BedDouble,
   Building2,
   TentTree,
   Swords,
@@ -26,7 +27,7 @@ import { logError } from '../utils/logger'
 
 const adminOperationLinks = [
   { label: 'Equipes', path: '/admin/equipes', icon: Trophy },
-  { label: 'Times', path: '/admin/times', icon: Swords },
+  { label: 'Quartos', path: '/admin/quartos', icon: BedDouble },
   { label: 'Participantes', path: '/admin/participantes', icon: Users },
   { label: 'Pontuação', path: '/admin/pontuacao', icon: PlusCircle },
   { label: 'Gincana', path: '/admin/gincana', icon: Swords },
@@ -40,7 +41,7 @@ function buildCampOperationLinks(campAdminBasePath) {
     { label: 'Dashboard', path: campAdminBasePath, icon: LayoutDashboard },
     { label: 'Conta', path: `${campAdminBasePath}/conta`, icon: UserRound },
     { label: 'Equipes', path: `${campAdminBasePath}/equipes`, icon: Trophy },
-    { label: 'Times', path: `${campAdminBasePath}/times`, icon: Swords },
+    { label: 'Quartos', path: `${campAdminBasePath}/quartos`, icon: BedDouble },
     {
       label: 'Participantes',
       path: `${campAdminBasePath}/participantes`,

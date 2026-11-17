@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import { calculateRanking } from '../domain/ranking'
+import { loadCampScoreTotals, readAllPages, totalsAsScoreEntries } from '../features/scores/scoreTotals'
 import { getCampNameStorageKey, useActiveCamp } from '../hooks/useActiveCamp'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
 
 export default function Dashboard() {
   const [competitionTeams, setCompetitionTeams] = useState([])
-  const [participants, setParticipants] = useState([])
+  const [activeParticipants, setActiveParticipants] = useState(0)
   const [events, setEvents] = useState([])
+  const [scoreTotals, setScoreTotals] = useState([])
   const [loading, setLoading] = useState(true)
   const { activeCampId } = useActiveCamp()
   const activeCampName = activeCampId
@@ -23,17 +25,19 @@ export default function Dashboard() {
       setLoading(true)
 
       const { data: competitionTeamsData, error: competitionTeamsError } =
-        await supabase
+        await readAllPages(() => supabase
           .from('competition_teams')
           .select('id, name, color, symbol, status, camp_id')
           .eq('camp_id', activeCampId)
           .eq('status', 'active')
           .order('name')
+          .order('id')
+        )
 
-      const { data: participantsData, error: participantsError } =
+      const { count: participantsCount, error: participantsError } =
         await supabase
           .from('participants')
-          .select('id, competition_team_id, is_active')
+          .select('id', { count: 'exact', head: true })
           .eq('camp_id', activeCampId)
           .eq('is_active', true)
 
@@ -57,14 +61,24 @@ export default function Dashboard() {
         `
         )
         .eq('camp_id', activeCampId)
+        .eq('is_voided', false)
         .not('competition_team_id', 'is', null)
         .order('created_at', { ascending: false })
+        .limit(5)
 
-      if (competitionTeamsError || participantsError || eventsError) {
+      const { data: totalsData, error: totalsError } = await loadCampScoreTotals(
+        supabase, 'camp_score_totals', activeCampId,
+      )
+
+      if (competitionTeamsError || participantsError || eventsError || totalsError) {
         logError('Dashboard',
-          competitionTeamsError || participantsError || eventsError
+          competitionTeamsError || participantsError || eventsError || totalsError
         )
         if (shouldIgnore) return
+        setCompetitionTeams([])
+        setActiveParticipants(0)
+        setEvents([])
+        setScoreTotals([])
         setLoading(false)
         return
       }
@@ -72,8 +86,9 @@ export default function Dashboard() {
       if (shouldIgnore) return
 
       setCompetitionTeams(competitionTeamsData || [])
-      setParticipants(participantsData || [])
+      setActiveParticipants(participantsCount || 0)
       setEvents(eventsData || [])
+      setScoreTotals(totalsData || [])
       setLoading(false)
     }
 
@@ -86,8 +101,9 @@ export default function Dashboard() {
 
     const timeoutId = window.setTimeout(() => {
       setCompetitionTeams([])
-      setParticipants([])
+      setActiveParticipants(0)
       setEvents([])
+      setScoreTotals([])
       setLoading(false)
     }, 0)
 
@@ -97,18 +113,17 @@ export default function Dashboard() {
   }, [activeCampId])
 
   const ranking = useMemo(() => {
-    return calculateRanking(competitionTeams, events, participants, {
-      includeInactive: false,
+    return calculateRanking(competitionTeams, totalsAsScoreEntries(scoreTotals), [], {
+      includeInactive: true,
       scoreTeamIdField: 'competition_team_id',
       participantTeamIdField: 'competition_team_id',
     })
-  }, [competitionTeams, participants, events])
+  }, [competitionTeams, scoreTotals])
 
   const activeTeams = ranking.length
-  const activeParticipants = participants.length
 
-  const totalPoints = events.reduce(
-    (sum, eventItem) => sum + Number(eventItem.points || 0),
+  const totalPoints = scoreTotals.reduce(
+    (sum, entry) => sum + Number(entry.total || 0),
     0
   )
 
@@ -154,7 +169,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
-          <p className="text-sm text-zinc-400">Times ativos</p>
+          <p className="text-sm text-zinc-400">Equipes ativas</p>
           <strong className="mt-3 block text-2xl sm:mt-4 sm:text-3xl">{activeTeams}</strong>
         </div>
 
@@ -175,7 +190,7 @@ export default function Dashboard() {
         </div>
 
         <div className="rounded-2xl border border-yellow-500/60 bg-yellow-500/10 p-4 sm:p-6">
-          <p className="text-sm text-zinc-400">Time líder</p>
+          <p className="text-sm text-zinc-400">Equipe líder</p>
 
           {leader ? (
             <div className="mt-3 flex items-center gap-3 sm:mt-4 sm:gap-4">
@@ -226,11 +241,11 @@ export default function Dashboard() {
 
                   <div>
                     <strong>
-                      {eventItem.competition_teams?.name || 'Sem time'}
+                      {eventItem.competition_teams?.name || 'Sem equipe'}
                     </strong>
 
                     <p className="text-sm text-zinc-400">
-                      {eventItem.participants?.full_name || 'Time inteiro'} ·{' '}
+                      {eventItem.participants?.full_name || 'Equipe inteira'} ·{' '}
                       {eventItem.category}
                     </p>
                   </div>

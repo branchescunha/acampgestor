@@ -5,8 +5,10 @@ import ResponsiveTable from '../components/ResponsiveTable'
 import {
   buildParticipantPayload,
   filterParticipants,
+  filterParticipantRooms,
   initialParticipantFilters,
   initialParticipantForm,
+  selectParticipantTeam,
   validateParticipantForm,
 } from '../features/participants/participantForm'
 import { useActiveCamp } from '../hooks/useActiveCamp'
@@ -60,6 +62,7 @@ export default function Participants() {
             competition_team_id,
             is_active,
             tribes (
+              competition_team_id,
               name,
               color,
               symbol
@@ -77,7 +80,9 @@ export default function Participants() {
 
       const { data: tribesData, error: tribesError } = await supabase
         .from('tribes')
-        .select('id, camp_id, name, color, symbol, room_type, room_name')
+        .select(
+          'id, camp_id, competition_team_id, name, color, symbol, room_type, room_name'
+        )
         .eq('camp_id', activeCampId)
         .order('name')
 
@@ -162,6 +167,7 @@ export default function Participants() {
         competition_team_id,
         is_active,
         tribes (
+          competition_team_id,
           name,
           color,
           symbol
@@ -187,6 +193,11 @@ export default function Participants() {
 
   function handleChange(event) {
     const { name, value, type, checked } = event.target
+
+    if (name === 'competition_team_id') {
+      setForm((currentForm) => selectParticipantTeam(currentForm, value))
+      return
+    }
 
     if (name === 'birth_date') {
       setForm((currentForm) => ({
@@ -266,7 +277,7 @@ export default function Participants() {
 
     if (error) {
       logError('Participants', error)
-      showError('Erro ao excluir participante.')
+      showError(error.code === '23503' ? 'Este participante possui histórico. Inative-o em vez de excluir.' : 'Erro ao excluir participante.')
       return
     }
 
@@ -278,7 +289,12 @@ export default function Participants() {
   async function handleSubmit(event) {
     event.preventDefault()
 
-    const validationError = validateParticipantForm(form, activeCampId)
+    const validationError = validateParticipantForm(
+      form,
+      activeCampId,
+      competitionTeams,
+      tribes,
+    )
 
     if (validationError) {
       showError(validationError)
@@ -307,7 +323,7 @@ export default function Participants() {
         error.code === '23503' ||
           error.code === '23514' ||
           message.includes('foreign key')
-          ? 'O Time selecionado não pertence a este acampamento.'
+          ? 'Verifique se a equipe e o quarto pertencem ao acampamento e se o quarto pertence à equipe.'
           : 'Erro ao salvar participante.'
       )
       setSaving(false)
@@ -325,14 +341,17 @@ export default function Participants() {
   }, [participants, filters])
 
   const activeCompetitionTeams = useMemo(() => {
-    return competitionTeams.filter((team) => team.status === 'active')
-  }, [competitionTeams])
+    return competitionTeams.filter(
+      (team) => team.status === 'active' && team.camp_id === activeCampId,
+    )
+  }, [competitionTeams, activeCampId])
 
   const formCompetitionTeams = useMemo(() => {
     if (!form.competition_team_id) return activeCompetitionTeams
 
     const selectedTeam = competitionTeams.find(
-      (team) => team.id === form.competition_team_id
+      (team) =>
+        team.id === form.competition_team_id && team.camp_id === activeCampId
     )
 
     if (!selectedTeam || selectedTeam.status === 'active') {
@@ -342,7 +361,12 @@ export default function Participants() {
     return [...activeCompetitionTeams, selectedTeam].sort((a, b) =>
       a.name.localeCompare(b.name, 'pt-BR')
     )
-  }, [activeCompetitionTeams, competitionTeams, form.competition_team_id])
+  }, [activeCompetitionTeams, competitionTeams, form.competition_team_id, activeCampId])
+
+  const formRooms = useMemo(
+    () => filterParticipantRooms(tribes, form.competition_team_id, activeCampId),
+    [tribes, form.competition_team_id, activeCampId],
+  )
 
   function renderGenderBadge(gender) {
     const isMale = gender === 'Masculino'
@@ -389,7 +413,7 @@ export default function Participants() {
     },
     {
       key: 'tribe',
-      label: 'Equipe/Quarto',
+      label: 'Quarto',
       render: (participant) =>
         participant.tribes ? (
           <div className="flex items-center justify-end gap-3 md:justify-start">
@@ -403,12 +427,12 @@ export default function Participants() {
             <span>{participant.tribes.name}</span>
           </div>
         ) : (
-          <span className="text-zinc-500">Sem equipe/quarto</span>
+          <span className="text-zinc-500">Sem quarto</span>
         ),
     },
     {
       key: 'competition_team',
-      label: 'Time',
+      label: 'Equipe',
       render: (participant) =>
         participant.competition_teams ? (
           <div className="flex items-center justify-end gap-3 md:justify-start">
@@ -427,7 +451,7 @@ export default function Participants() {
             </span>
           </div>
         ) : (
-          <span className="text-zinc-500">Sem time</span>
+          <span className="text-zinc-500">Sem equipe</span>
         ),
     },
     {
@@ -591,34 +615,18 @@ export default function Participants() {
           />
 
           <select
-            name="tribe_id"
-            value={form.tribe_id}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            <option value="">Sem equipe/quarto</option>
-
-            {tribes.map((tribe) => (
-              <option key={tribe.id} value={tribe.id}>
-                {tribe.name}
-              </option>
-            ))}
-          </select>
-
-          {tribes.length === 0 && (
-            <p className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100 md:col-span-2 xl:col-span-4">
-              Nenhuma Equipe/Quarto cadastrada. O participante pode ser salvo
-              sem esse vínculo.
-            </p>
-          )}
-
-          <select
             name="competition_team_id"
-            value={form.competition_team_id}
+            aria-label="Equipe"
+            required
+            value={
+              formCompetitionTeams.some((team) => team.id === form.competition_team_id)
+                ? form.competition_team_id
+                : ''
+            }
             onChange={handleChange}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Sem time</option>
+            <option value="">Selecione a equipe</option>
 
             {formCompetitionTeams.map((team) => (
               <option key={team.id} value={team.id}>
@@ -628,9 +636,35 @@ export default function Participants() {
             ))}
           </select>
 
-          {competitionTeams.length === 0 && (
+          <select
+            name="tribe_id"
+            aria-label="Quarto"
+            required
+            disabled={!form.competition_team_id}
+            value={
+              formRooms.some((room) => room.id === form.tribe_id) ? form.tribe_id : ''
+            }
+            onChange={handleChange}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <option value="">Selecione o quarto</option>
+
+            {formRooms.map((tribe) => (
+              <option key={tribe.id} value={tribe.id}>
+                {tribe.name}
+              </option>
+            ))}
+          </select>
+
+          {formCompetitionTeams.length === 0 && (
             <p className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100 md:col-span-2 xl:col-span-4">
-              Nenhum Time cadastrado. O participante pode ser salvo sem Time.
+              Nenhuma equipe disponível neste acampamento.
+            </p>
+          )}
+
+          {form.competition_team_id && formRooms.length === 0 && (
+            <p className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100 md:col-span-2 xl:col-span-4">
+              Nenhum quarto vinculado a esta equipe neste acampamento.
             </p>
           )}
 
@@ -757,7 +791,7 @@ export default function Participants() {
             onChange={handleFilterChange}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Todas as Equipes/Quartos</option>
+            <option value="">Todos os Quartos</option>
 
             {tribes.map((tribe) => (
               <option key={tribe.id} value={tribe.id}>
@@ -772,8 +806,8 @@ export default function Participants() {
             onChange={handleFilterChange}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Todos os Times</option>
-            <option value="none">Sem time</option>
+            <option value="">Todas as Equipes</option>
+            <option value="none">Sem equipe</option>
 
             {activeCompetitionTeams.map((team) => (
               <option key={team.id} value={team.id}>

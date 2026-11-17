@@ -19,7 +19,7 @@ const colorOptions = [
   { name: 'Lima', value: '#84cc16' },
 ]
 
-const roomTypes = ['UPA Boys', 'UPA Girls', 'UMP Boys', 'UMP Girls']
+const roomTypes = ['Masculino', 'Feminino', 'Outros']
 
 const initialForm = {
   name: '',
@@ -28,17 +28,18 @@ const initialForm = {
   room_type: '',
   room_name: '',
   leader_name: '',
+  competition_team_id: '',
 }
 
 const initialFilters = {
   search: '',
   status: '',
-  group: '',
-  gender: '',
+  room_type: '',
 }
 
 export default function CampGroups() {
   const [tribes, setTribes] = useState([])
+  const [teams, setTeams] = useState([])
   const [participants, setParticipants] = useState([])
   const [form, setForm] = useState(initialForm)
   const [filters, setFilters] = useState(initialFilters)
@@ -58,7 +59,7 @@ export default function CampGroups() {
       const { data: tribesData, error: tribesError } = await supabase
         .from('tribes')
         .select(
-          'id, camp_id, name, symbol, color, room_type, room_name, leader_name, is_active, created_at',
+          'id, camp_id, name, symbol, color, room_type, room_name, leader_name, competition_team_id, is_active, created_at',
         )
         .eq('camp_id', activeCampId)
         .order('name')
@@ -71,12 +72,19 @@ export default function CampGroups() {
           .eq('is_active', true)
           .order('full_name')
 
-      if (tribesError || participantsError) {
-        logError('CampGroups', tribesError || participantsError)
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('competition_teams')
+        .select('id, camp_id, name, status')
+        .eq('camp_id', activeCampId)
+        .order('name')
+
+      if (tribesError || participantsError || teamsError) {
+        logError('CampGroups', tribesError || participantsError || teamsError)
         if (shouldIgnore) return
         setTribes([])
         setParticipants([])
-        showError('Erro ao carregar equipes e participantes.')
+        setTeams([])
+        showError('Erro ao carregar quartos, equipes e participantes.')
         setLoading(false)
         return
       }
@@ -85,6 +93,7 @@ export default function CampGroups() {
 
       setTribes(tribesData || [])
       setParticipants(participantsData || [])
+      setTeams(teamsData || [])
       setLoading(false)
     }
 
@@ -98,6 +107,7 @@ export default function CampGroups() {
     const timeoutId = window.setTimeout(() => {
       setTribes([])
       setParticipants([])
+      setTeams([])
       setLoading(false)
     }, 0)
 
@@ -119,7 +129,7 @@ export default function CampGroups() {
     const { data, error } = await supabase
       .from('tribes')
       .select(
-        'id, camp_id, name, symbol, color, room_type, room_name, leader_name, is_active, created_at',
+        'id, camp_id, name, symbol, color, room_type, room_name, leader_name, competition_team_id, is_active, created_at',
       )
       .eq('camp_id', activeCampId)
       .order('name')
@@ -154,14 +164,6 @@ export default function CampGroups() {
     setFilters(initialFilters)
   }
 
-  function handleRoomTypeChange(event) {
-    setForm((currentForm) => ({
-      ...currentForm,
-      room_type: event.target.value,
-      leader_name: '',
-    }))
-  }
-
   const getTribeParticipants = useCallback((tribeId) => {
     return participants.filter(
       (participant) => participant.tribe_id === tribeId
@@ -182,6 +184,7 @@ export default function CampGroups() {
       room_type: tribe.room_type || '',
       room_name: tribe.room_name || '',
       leader_name: tribe.leader_name || '',
+      competition_team_id: tribe.competition_team_id || '',
     })
 
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -194,9 +197,9 @@ export default function CampGroups() {
 
   async function handleDelete() {
     const confirmDelete = await requestConfirmation({
-      title: 'Excluir equipe',
+      title: 'Excluir quarto',
       description:
-        'Tem certeza que deseja excluir esta equipe? Essa ação não pode ser desfeita.',
+        'Tem certeza que deseja excluir este quarto? Essa ação não pode ser desfeita.',
       confirmLabel: 'Excluir',
     })
 
@@ -210,7 +213,7 @@ export default function CampGroups() {
 
     if (error) {
       logError('CampGroups', error)
-      showError('Erro ao excluir equipe.')
+      showError('Erro ao excluir quarto.')
       return
     }
 
@@ -223,17 +226,21 @@ export default function CampGroups() {
     event.preventDefault()
 
     if (!activeCampId) {
-      showError('Selecione um acampamento antes de cadastrar equipes.')
+      showError('Selecione um acampamento antes de cadastrar quartos.')
       return
     }
 
     if (!form.name.trim()) {
-      showError('Informe o nome da equipe.')
+      showError('Informe o nome do quarto.')
       return
     }
 
-    if (!form.symbol.trim()) {
-      showError('Informe o símbolo da equipe.')
+    if (
+      !teams.some(
+        (team) => team.id === form.competition_team_id && team.camp_id === activeCampId,
+      )
+    ) {
+      showError('Selecione uma equipe deste acampamento para o quarto.')
       return
     }
 
@@ -243,7 +250,8 @@ export default function CampGroups() {
       name: form.name.trim(),
       symbol: form.symbol.trim(),
       color: form.color,
-      room_type: form.room_type || null,
+      room_type: form.room_type.trim() || null,
+      competition_team_id: form.competition_team_id,
       room_name: form.room_name.trim() || null,
       leader_name: form.leader_name.trim() || null,
       is_active: editingId ? getActiveStatus(editingId) : false,
@@ -262,7 +270,7 @@ export default function CampGroups() {
 
     if (error) {
       logError('CampGroups', error)
-      showError('Erro ao salvar equipe.')
+      showError('Erro ao salvar quarto.')
       setSaving(false)
       return
     }
@@ -275,29 +283,13 @@ export default function CampGroups() {
 
   const selectedColor = colorOptions.find((color) => color.value === form.color)
 
-  const availableLeaders = useMemo(() => {
-    if (!editingId) return []
-
-    const currentTribeParticipants = getTribeParticipants(editingId)
-
-    if (form.room_type.includes('Boys')) {
-      return currentTribeParticipants.filter(
-        (participant) =>
-          participant.gender === 'Masculino' && participant.group_type === 'UMP'
-      )
-    }
-
-    if (form.room_type.includes('Girls')) {
-      return currentTribeParticipants.filter(
-        (participant) =>
-          participant.gender === 'Feminino' && participant.group_type === 'UMP'
-      )
-    }
-
-    return currentTribeParticipants.filter(
-      (participant) => participant.group_type === 'UMP'
-    )
-  }, [editingId, form.room_type, getTribeParticipants])
+  const teamsById = useMemo(
+    () => new Map(teams.map((team) => [team.id, team])),
+    [teams],
+  )
+  const filterRoomTypes = [
+    ...new Set([...roomTypes, ...tribes.map((tribe) => tribe.room_type).filter(Boolean)]),
+  ]
 
   const filteredAndSortedTribes = useMemo(() => {
     return [...tribes]
@@ -318,15 +310,11 @@ export default function CampGroups() {
             : !activeStatus
           : true
 
-        const matchesGroup = filters.group
-          ? tribe.room_type?.includes(filters.group)
+        const matchesRoomType = filters.room_type
+          ? tribe.room_type === filters.room_type
           : true
 
-        const matchesGender = filters.gender
-          ? tribe.room_type?.includes(filters.gender)
-          : true
-
-        return matchesSearch && matchesStatus && matchesGroup && matchesGender
+        return matchesSearch && matchesStatus && matchesRoomType
       })
       .sort((a, b) => {
         const aActive = getActiveStatus(a.id)
@@ -342,20 +330,17 @@ export default function CampGroups() {
 
   const activeCount = tribes.filter((tribe) => getActiveStatus(tribe.id)).length
 
-  const isUmpRoom = form.room_type.includes('UMP')
-  const isUpaRoom = form.room_type.includes('UPA')
-
   return (
     <section>
       <PageHeader
         eyebrow="Gestão"
-        title="Equipes"
-        description="Gerenciamento das equipes livres de competição do acampamento."
+        title="Quartos"
+        description="Gerenciamento dos quartos e de seus vínculos com as equipes do acampamento."
       />
 
       {!activeCampId && (
         <div className="mb-6">
-          <ActiveCampNotice message="Selecione um acampamento para cadastrar e gerenciar equipes." />
+          <ActiveCampNotice message="Selecione um acampamento para cadastrar e gerenciar quartos." />
         </div>
       )}
 
@@ -364,7 +349,7 @@ export default function CampGroups() {
         className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6"
       >
         <h2 className="text-xl font-bold">
-          {editingId ? 'Editar equipe' : 'Nova equipe'}
+          {editingId ? 'Editar quarto' : 'Novo quarto'}
         </h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -372,7 +357,9 @@ export default function CampGroups() {
             name="name"
             value={form.name}
             onChange={handleChange}
-            placeholder="Nome da equipe"
+            placeholder="Nome do quarto"
+            aria-label="Nome do quarto"
+            required
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           />
 
@@ -407,17 +394,34 @@ export default function CampGroups() {
             </span>
           </div>
 
-          <select
+          <input
             name="room_type"
             value={form.room_type}
-            onChange={handleRoomTypeChange}
+            onChange={handleChange}
+            list="room-types"
+            aria-label="Tipo de quarto"
+            placeholder="Tipo de quarto, opcional"
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+          />
+          <datalist id="room-types">
+            {roomTypes.map((roomType) => (
+              <option key={roomType} value={roomType} />
+            ))}
+          </datalist>
+
+          <select
+            name="competition_team_id"
+            value={form.competition_team_id}
+            onChange={handleChange}
+            aria-label="Equipe do quarto"
+            required
+            disabled={loading || !activeCampId}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Tipo de quarto, opcional</option>
-
-            {roomTypes.map((roomType) => (
-              <option key={roomType} value={roomType}>
-                {roomType}
+            <option value="">Selecione a equipe</option>
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}{team.status === 'inactive' ? ' (inativa)' : ''}
               </option>
             ))}
           </select>
@@ -430,42 +434,18 @@ export default function CampGroups() {
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           />
 
-          {isUmpRoom && editingId && availableLeaders.length > 0 ? (
-            <select
-              name="leader_name"
-              value={form.leader_name}
-              onChange={handleChange}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-            >
-              <option value="">Selecione o líder</option>
-
-              {availableLeaders.map((participant) => (
-                <option key={participant.id} value={participant.full_name}>
-                  {participant.full_name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              name="leader_name"
-              value={form.leader_name}
-              onChange={handleChange}
-              placeholder={
-                isUpaRoom
-                  ? 'Tio responsável'
-                  : isUmpRoom
-                    ? 'Líder da equipe'
-                    : 'Responsável / líder'
-              }
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-            />
-          )}
+          <input
+            name="leader_name"
+            value={form.leader_name}
+            onChange={handleChange}
+            placeholder="Responsável / líder"
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+          />
         </div>
 
-        {isUmpRoom && editingId && availableLeaders.length === 0 && (
-          <p className="mt-3 text-sm text-zinc-400">
-            Para selecionar um líder automaticamente, cadastre participantes UMP
-            compatíveis nesta equipe.
+        {!loading && activeCampId && teams.length === 0 && (
+          <p className="mt-3 text-sm text-yellow-400" role="status">
+            Nenhuma equipe cadastrada neste acampamento.
           </p>
         )}
 
@@ -492,14 +472,14 @@ export default function CampGroups() {
 
           <button
             type="submit"
-            disabled={saving || !activeCampId}
+            disabled={saving || loading || !activeCampId || teams.length === 0}
             className="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving
               ? 'Salvando...'
               : editingId
                 ? 'Salvar alterações'
-                : 'Cadastrar equipe'}
+                : 'Cadastrar quarto'}
           </button>
         </div>
       </form>
@@ -507,11 +487,11 @@ export default function CampGroups() {
       <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <h2 className="text-xl font-bold">Lista de equipes</h2>
+            <h2 className="text-xl font-bold">Lista de quartos</h2>
 
             <p className="mt-2 text-sm text-zinc-400">
-              {filteredAndSortedTribes.length} de {tribes.length} equipe(s)
-              exibida(s). {activeCount} ativa(s).
+              {filteredAndSortedTribes.length} de {tribes.length} quarto(s)
+              exibido(s). {activeCount} ativo(s).
             </p>
           </div>
 
@@ -529,7 +509,7 @@ export default function CampGroups() {
             name="search"
             value={filters.search}
             onChange={handleFilterChange}
-            placeholder="Buscar por equipe, quarto ou responsável"
+            placeholder="Buscar por quarto ou responsável"
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 xl:col-span-2"
           />
 
@@ -539,41 +519,31 @@ export default function CampGroups() {
             onChange={handleFilterChange}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Todas</option>
-            <option value="active">Ativas</option>
-            <option value="inactive">Inativas</option>
+            <option value="">Todos</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
           </select>
 
           <select
-            name="group"
-            value={filters.group}
+            name="room_type"
+            value={filters.room_type}
             onChange={handleFilterChange}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">UPA / UMP</option>
-            <option value="UPA">UPA</option>
-            <option value="UMP">UMP</option>
-          </select>
-
-          <select
-            name="gender"
-            value={filters.gender}
-            onChange={handleFilterChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            <option value="">Boys / Girls</option>
-            <option value="Boys">Boys</option>
-            <option value="Girls">Girls</option>
+            <option value="">Todos os tipos</option>
+            {filterRoomTypes.map((roomType) => (
+              <option key={roomType} value={roomType}>{roomType}</option>
+            ))}
           </select>
         </div>
       </div>
 
       <div className="mt-8">
         {loading ? (
-          <p className="text-zinc-400">Carregando equipes...</p>
+          <p className="text-zinc-400">Carregando quartos...</p>
         ) : filteredAndSortedTribes.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-400">
-            Nenhuma equipe cadastrada para este acampamento.
+            Nenhum quarto encontrado para este acampamento.
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -602,30 +572,12 @@ export default function CampGroups() {
                             : 'bg-zinc-700 text-zinc-300'
                         }`}
                       >
-                        {activeStatus ? 'Ativa' : 'Inativa'}
+                        {activeStatus ? 'Ativo' : 'Inativo'}
                       </span>
 
-                      {tribe.room_type?.includes('Boys') && (
-                        <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-300">
-                          Boys
-                        </span>
-                      )}
-
-                      {tribe.room_type?.includes('Girls') && (
-                        <span className="rounded-full bg-pink-500/20 px-3 py-1 text-xs text-pink-300">
-                          Girls
-                        </span>
-                      )}
-
-                      {tribe.room_type?.includes('UPA') && (
+                      {!teamsById.has(tribe.competition_team_id) && (
                         <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs text-yellow-300">
-                          UPA
-                        </span>
-                      )}
-
-                      {tribe.room_type?.includes('UMP') && (
-                        <span className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-300">
-                          UMP
+                          Vínculo pendente
                         </span>
                       )}
                     </div>
@@ -634,6 +586,7 @@ export default function CampGroups() {
                   <h2 className="mt-6 text-2xl font-bold">{tribe.name}</h2>
 
                   <div className="mt-5 space-y-2 text-sm text-zinc-400">
+                    <p>Equipe: {teamsById.get(tribe.competition_team_id)?.name || 'Vínculo pendente'}</p>
                     <p>Tipo de quarto: {tribe.room_type || 'Opcional'}</p>
                     <p>Quarto: {tribe.room_name || 'Opcional'}</p>
                     <p>Responsável: {tribe.leader_name || 'Não definido'}</p>

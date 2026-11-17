@@ -30,7 +30,26 @@ export const initialParticipantFilters = {
   status: '',
 }
 
-export function validateParticipantForm(form, activeCampId) {
+export function selectParticipantTeam(form, competitionTeamId) {
+  return { ...form, competition_team_id: competitionTeamId, tribe_id: '' }
+}
+
+export function filterParticipantRooms(tribes, competitionTeamId, activeCampId) {
+  if (!competitionTeamId || !activeCampId) return []
+
+  return tribes.filter(
+    (tribe) =>
+      tribe.competition_team_id === competitionTeamId &&
+      tribe.camp_id === activeCampId,
+  )
+}
+
+export function validateParticipantForm(
+  form,
+  activeCampId,
+  competitionTeams = [],
+  tribes = [],
+) {
   if (!activeCampId) {
     return 'Selecione um acampamento antes de cadastrar participantes.'
   }
@@ -45,6 +64,30 @@ export function validateParticipantForm(form, activeCampId) {
 
   if (!form.group_type) {
     return 'Selecione UPA ou UMP.'
+  }
+
+  if (!form.competition_team_id) {
+    return 'Selecione a equipe.'
+  }
+
+  const team = competitionTeams.find(
+    (item) => item.id === form.competition_team_id && item.camp_id === activeCampId,
+  )
+
+  if (!team) {
+    return 'Selecione uma equipe válida deste acampamento.'
+  }
+
+  if (!form.tribe_id) {
+    return 'Selecione o quarto.'
+  }
+
+  const room = filterParticipantRooms(tribes, team.id, activeCampId).find(
+    (item) => item.id === form.tribe_id,
+  )
+
+  if (!room) {
+    return 'Selecione um quarto válido da equipe e deste acampamento.'
   }
 
   return ''

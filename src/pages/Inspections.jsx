@@ -3,7 +3,11 @@ import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
 import { normalizeScoreAmount } from '../domain/scoring'
-import { createOperationGuard, isValidOperationPoints } from '../features/scoringOperations'
+import { createOperationGuard } from '../features/scoringOperations'
+import {
+  createResultOperation,
+  isIntegerPoints,
+} from '../features/eventOperations'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
@@ -34,61 +38,78 @@ const inspectionSchedule = {
 
 export default function Inspections() {
   const [tribes, setTribes] = useState([])
+  const [competitionTeams, setCompetitionTeams] = useState([])
   const [inspections, setInspections] = useState([])
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const operationGuard = useRef(createOperationGuard())
+  const resultOperation = useRef(createResultOperation(supabase))
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
   const { showError } = useToast()
 
-  const loadData = useCallback(async (shouldIgnore = () => false) => {
-    if (!activeCampId) {
-      if (shouldIgnore()) return
-      setTribes([])
-      setInspections([])
-      setLoading(false)
-      return
-    }
+  const loadData = useCallback(
+    async (shouldIgnore = () => false) => {
+      setLoading(true)
+      if (!activeCampId) {
+        if (shouldIgnore()) return
+        setTribes([])
+        setCompetitionTeams([])
+        setInspections([])
+        setLoading(false)
+        return
+      }
 
-    const { data: tribesData, error: tribesError } = await supabase
-      .from('tribes')
-      .select('id, camp_id, name, color, symbol, room_name, room_type')
-      .eq('camp_id', activeCampId)
-      .order('name')
+      const { data: tribesData, error: tribesError } = await supabase
+        .from('tribes')
+        .select(
+          'id, camp_id, name, color, symbol, room_name, room_type, competition_team_id'
+        )
+        .eq('camp_id', activeCampId)
+        .order('name')
 
-    const { data: inspectionsData, error: inspectionsError } = await supabase
-      .from('room_inspections')
-      .select(
-        `
+      const { data: inspectionsData, error: inspectionsError } = await supabase
+        .from('room_inspections')
+        .select(
+          `
         *,
         tribes (
           name,
           color,
           symbol,
           room_name,
-          room_type
+          room_type,
+          competition_team_id
         )
       `
-      )
-      .eq('camp_id', activeCampId)
-      .order('created_at', { ascending: false })
+        )
+        .eq('camp_id', activeCampId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
 
-    if (tribesError || inspectionsError) {
-      logError('Inspections', tribesError || inspectionsError)
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('competition_teams')
+        .select('id, name')
+        .eq('camp_id', activeCampId)
+
+      if (tribesError || inspectionsError || teamsError) {
+        logError('Inspections', tribesError || inspectionsError || teamsError)
+        if (shouldIgnore()) return
+        setLoading(false)
+        return
+      }
+
       if (shouldIgnore()) return
+
+      setTribes(tribesData || [])
+      setCompetitionTeams(teamsData || [])
+      setInspections(inspectionsData || [])
       setLoading(false)
-      return
-    }
-
-    if (shouldIgnore()) return
-
-    setTribes(tribesData || [])
-    setInspections(inspectionsData || [])
-    setLoading(false)
-  }, [activeCampId])
+    },
+    [activeCampId]
+  )
 
   useEffect(() => {
     let shouldIgnore = false
@@ -125,6 +146,7 @@ export default function Inspections() {
   }
 
   function handleEdit(inspection) {
+    if (saving) return
     setEditingId(inspection.id)
 
     setForm({
@@ -145,22 +167,6 @@ export default function Inspections() {
     setForm(initialForm)
   }
 
-  async function createScoreEvent(inspectionId, payload) {
-    const { error } = await supabase.from('score_events').insert({
-      tribe_id: payload.tribe_id,
-      participant_id: null,
-      type: payload.type,
-      category: `Inspeção ${payload.inspection_day} - ${payload.inspection_period}`,
-      points: payload.points,
-      reason: `Inspeção ${payload.inspection_day} - ${payload.inspection_period}`,
-      notes: payload.notes,
-      room_inspection_id: inspectionId,
-      camp_id: activeCampId,
-    })
-
-    if (error) throw error
-  }
-
   async function handleSubmit(event) {
     event.preventDefault()
 
@@ -170,27 +176,46 @@ export default function Inspections() {
     }
 
     if (!form.tribe_id) {
-      showError('Selecione uma equipe.')
+      showError('Selecione um quarto.')
       return
     }
 
-    if (!tribes.some((tribe) => tribe.id === form.tribe_id)) {
-      showError('Selecione uma equipe deste acampamento.')
+    const selectedRoom = tribes.find((tribe) => tribe.id === form.tribe_id)
+    if (!selectedRoom) {
+      showError('Selecione um quarto deste acampamento.')
       return
     }
 
-    if (!form.inspection_day) {
+    if (
+      !selectedRoom.competition_team_id ||
+      !competitionTeams.some(
+        (team) => team.id === selectedRoom.competition_team_id
+      )
+    ) {
+      showError('Vincule o quarto a uma equipe antes de lançar a inspeção.')
+      return
+    }
+
+    if (!availablePeriods[form.inspection_day]) {
       showError('Selecione o dia da inspeção.')
       return
     }
 
-    if (!form.inspection_period) {
+    if (
+      !availablePeriods[form.inspection_day].includes(form.inspection_period)
+    ) {
       showError('Selecione o período da inspeção.')
       return
     }
 
-    if (!isValidOperationPoints(form.points, { allowZero: true })) {
-      showError('Informe uma quantidade válida de pontos.')
+    if (!['POINT', 'PENALTY'].includes(form.type)) {
+      showError('Selecione um tipo válido de inspeção.')
+      return
+    }
+
+    const signedPoints = normalizeScoreAmount(form.type, form.points)
+    if (!isIntegerPoints(form.points) || !isIntegerPoints(signedPoints)) {
+      showError('Informe uma quantidade inteira válida de pontos.')
       return
     }
 
@@ -203,48 +228,27 @@ export default function Inspections() {
         inspection_day: form.inspection_day,
         inspection_period: form.inspection_period,
         type: form.type,
-        points: normalizeScoreAmount(form.type, form.points),
+        points: signedPoints,
         has_photo: form.has_photo,
         notes: form.notes.trim() || null,
-        camp_id: activeCampId,
       }
 
-      if (editingId) {
-        const { error: deleteOldScoreError } = await supabase
-          .from('score_events')
-          .delete()
-          .eq('room_inspection_id', editingId)
-          .eq('camp_id', activeCampId)
-
-        if (deleteOldScoreError) throw deleteOldScoreError
-
-        const { error: updateError } = await supabase
-          .from('room_inspections')
-          .update(payload)
-          .eq('id', editingId)
-          .eq('camp_id', activeCampId)
-
-        if (updateError) throw updateError
-
-        await createScoreEvent(editingId, payload)
-      } else {
-        const { data: inspectionData, error: insertError } = await supabase
-          .from('room_inspections')
-          .insert(payload)
-          .select('id')
-          .single()
-
-        if (insertError) throw insertError
-
-        await createScoreEvent(inspectionData.id, payload)
-      }
+      await resultOperation.current.execute({
+        campId: activeCampId,
+        kind: 'inspection',
+        action: 'save',
+        recordId: editingId,
+        payload,
+      })
 
       setForm(initialForm)
       setEditingId(null)
       await loadData()
     } catch (error) {
       logError('Inspections', error)
-      showError('Operação incompleta. Confira a inspeção e a pontuação antes de tentar novamente.')
+      showError(
+        'Não foi possível confirmar a operação. Tente novamente sem alterar os dados para repetir a mesma tentativa.'
+      )
     } finally {
       operationGuard.current.release()
       setSaving(false)
@@ -252,44 +256,34 @@ export default function Inspections() {
   }
 
   async function handleDelete() {
+    if (!activeCampId || !editingId) return
     if (!operationGuard.current.acquire()) return
-    const confirmDelete = await requestConfirmation({
-      title: 'Excluir inspeção',
-      description:
-        'Tem certeza que deseja excluir esta inspeção? Os pontos vinculados também serão removidos.',
-      confirmLabel: 'Excluir',
-    })
-
-    if (!confirmDelete) {
-      operationGuard.current.release()
-      return
-    }
-
     setSaving(true)
 
     try {
-      const { error: deleteScoreError } = await supabase
-        .from('score_events')
-        .delete()
-        .eq('room_inspection_id', editingId)
-        .eq('camp_id', activeCampId)
+      const confirmDelete = await requestConfirmation({
+        title: 'Excluir inspeção',
+        description:
+          'Tem certeza que deseja excluir esta inspeção? Os pontos vinculados serão anulados, preservando o histórico.',
+        confirmLabel: 'Excluir',
+      })
+      if (!confirmDelete) return
 
-      if (deleteScoreError) throw deleteScoreError
-
-      const { error: deleteInspectionError } = await supabase
-        .from('room_inspections')
-        .delete()
-        .eq('id', editingId)
-        .eq('camp_id', activeCampId)
-
-      if (deleteInspectionError) throw deleteInspectionError
+      await resultOperation.current.execute({
+        campId: activeCampId,
+        kind: 'inspection',
+        action: 'delete',
+        recordId: editingId,
+      })
 
       setForm(initialForm)
       setEditingId(null)
       await loadData()
     } catch (error) {
       logError('Inspections', error)
-      showError('Exclusão incompleta. Confira a inspeção e a pontuação antes de tentar novamente.')
+      showError(
+        'Não foi possível confirmar a exclusão. Tente novamente para repetir a mesma tentativa.'
+      )
     } finally {
       operationGuard.current.release()
       setSaving(false)
@@ -323,6 +317,14 @@ export default function Inspections() {
     return [...tribes].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
   }, [tribes])
 
+  function getRoomLabel(tribe) {
+    if (!tribe) return 'Quarto não encontrado'
+    const team = competitionTeams.find(
+      (item) => item.id === tribe.competition_team_id
+    )
+    return `${tribe.room_name || tribe.name} / ${team?.name || 'Sem equipe vinculada'}`
+  }
+
   const columns = [
     {
       key: 'date',
@@ -335,7 +337,7 @@ export default function Inspections() {
     },
     {
       key: 'tribe',
-      label: 'Equipe',
+      label: 'Quarto / equipe',
       render: (inspection) => (
         <div className="flex items-center justify-end gap-3 md:justify-start">
           <div
@@ -345,7 +347,7 @@ export default function Inspections() {
             {inspection.tribes?.symbol}
           </div>
 
-          <span>{inspection.tribes?.name}</span>
+          <span>{getRoomLabel(inspection.tribes)}</span>
         </div>
       ),
     },
@@ -408,6 +410,7 @@ export default function Inspections() {
         <button
           type="button"
           onClick={() => handleEdit(inspection)}
+          disabled={saving}
           className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
         >
           Editar
@@ -438,120 +441,127 @@ export default function Inspections() {
           {editingId ? 'Editar inspeção' : 'Nova inspeção'}
         </h2>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <select
-            name="tribe_id"
-            value={form.tribe_id}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            <option value="">Selecione a equipe</option>
+        <fieldset disabled={saving}>
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <select
+              name="tribe_id"
+              value={form.tribe_id}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            >
+              <option value="">Selecione o quarto / equipe</option>
 
-            {activeTribes.map((tribe) => (
-              <option key={tribe.id} value={tribe.id}>
-                {tribe.name}
-              </option>
-            ))}
-          </select>
+              {activeTribes.map((tribe) => (
+                <option
+                  key={tribe.id}
+                  value={tribe.id}
+                  disabled={!tribe.competition_team_id}
+                >
+                  {getRoomLabel(tribe)}
+                </option>
+              ))}
+            </select>
 
-          <select
-            name="inspection_day"
-            value={form.inspection_day}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            <option value="Sexta">Sexta</option>
-            <option value="Sábado">Sábado</option>
-            <option value="Domingo">Domingo</option>
-          </select>
+            <select
+              name="inspection_day"
+              value={form.inspection_day}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            >
+              <option value="Sexta">Sexta</option>
+              <option value="Sábado">Sábado</option>
+              <option value="Domingo">Domingo</option>
+            </select>
 
-          <select
-            name="inspection_period"
-            value={form.inspection_period}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            {availablePeriods[form.inspection_day]?.map((period) => (
-              <option key={period} value={period}>
-                {period}
-              </option>
-            ))}
-          </select>
+            <select
+              name="inspection_period"
+              value={form.inspection_period}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            >
+              {availablePeriods[form.inspection_day]?.map((period) => (
+                <option key={period} value={period}>
+                  {period}
+                </option>
+              ))}
+            </select>
 
-          <select
-            name="type"
-            value={form.type}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            <option value="POINT">Pontuação</option>
-            <option value="PENALTY">Penalidade</option>
-          </select>
+            <select
+              name="type"
+              value={form.type}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            >
+              <option value="POINT">Pontuação</option>
+              <option value="PENALTY">Penalidade</option>
+            </select>
 
-          <input
-            name="points"
-            value={form.points}
+            <input
+              name="points"
+              value={form.points}
+              onChange={handleChange}
+              type="number"
+              step="1"
+              placeholder="Quantidade de pontos"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            />
+
+            <label className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                name="has_photo"
+                checked={form.has_photo}
+                onChange={handleChange}
+                className="h-4 w-4"
+              />
+              Possui foto da inspeção
+            </label>
+          </div>
+
+          <textarea
+            name="notes"
+            value={form.notes}
             onChange={handleChange}
-            type="number"
-            placeholder="Quantidade de pontos"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            placeholder="Observações (opcional)"
+            className="mt-4 min-h-24 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           />
 
-          <label className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300">
-            <input
-              type="checkbox"
-              name="has_photo"
-              checked={form.has_photo}
-              onChange={handleChange}
-              className="h-4 w-4"
-            />
-            Possui foto da inspeção
-          </label>
-        </div>
+          <div className="mt-4 flex flex-col justify-end gap-3 sm:flex-row">
+            {editingId && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={saving}
+                  className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Excluir
+                </button>
 
-        <textarea
-          name="notes"
-          value={form.notes}
-          onChange={handleChange}
-          placeholder="Observações (opcional)"
-          className="mt-4 min-h-24 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-        />
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                  className="rounded-xl border border-zinc-700 px-6 py-3 font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+              </>
+            )}
 
-        <div className="mt-4 flex flex-col justify-end gap-3 sm:flex-row">
-          {editingId && (
-            <>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={saving}
-                className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Excluir
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                disabled={saving}
-                className="rounded-xl border border-zinc-700 px-6 py-3 font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-            </>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving || !activeCampId}
-            className="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving
-              ? 'Salvando...'
-              : editingId
-                ? 'Salvar alterações'
-                : 'Cadastrar inspeção'}
-          </button>
-        </div>
+            <button
+              type="submit"
+              disabled={saving || !activeCampId}
+              className="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving
+                ? 'Salvando...'
+                : editingId
+                  ? 'Salvar alterações'
+                  : 'Cadastrar inspeção'}
+            </button>
+          </div>
+        </fieldset>
       </form>
 
       <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
@@ -572,7 +582,7 @@ export default function Inspections() {
                 </div>
 
                 <div>
-                  <h3 className="font-bold">{tribe.name}</h3>
+                  <h3 className="font-bold">{getRoomLabel(tribe)}</h3>
 
                   <p className="text-sm text-zinc-500">
                     {tribe.room_name

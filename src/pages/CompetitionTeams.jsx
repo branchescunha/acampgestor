@@ -34,7 +34,7 @@ function getCompetitionTeamErrorMessage(error, fallback) {
     error?.code === '23505' ||
     message.includes('competition_teams_camp_name_unique_idx')
   ) {
-    return 'Já existe um Time com esse nome neste acampamento.'
+    return 'Já existe uma equipe com esse nome neste acampamento.'
   }
 
   if (
@@ -42,7 +42,7 @@ function getCompetitionTeamErrorMessage(error, fallback) {
     error?.code === '23514' ||
     message.includes('foreign key')
   ) {
-    return 'O Time selecionado não pertence a este acampamento.'
+    return 'A equipe selecionada não pertence a este acampamento.'
   }
 
   return fallback
@@ -56,10 +56,10 @@ function getDeleteErrorMessage(error) {
     message.includes('foreign key') ||
     message.includes('restrict')
   ) {
-    return 'Este Time possui vínculos ou histórico. Inative o Time em vez de excluí-lo.'
+    return 'Esta equipe possui vínculos ou histórico. Inative a equipe em vez de excluí-la.'
   }
 
-  return 'Erro ao excluir Time.'
+  return 'Erro ao excluir equipe.'
 }
 
 export default function CompetitionTeams() {
@@ -99,7 +99,7 @@ export default function CompetitionTeams() {
         if (shouldIgnore) return
         setTeams([])
         setParticipants([])
-        showError('Erro ao carregar Times e participantes.')
+        showError('Erro ao carregar equipes e participantes.')
         setLoading(false)
         return
       }
@@ -188,9 +188,9 @@ export default function CompetitionTeams() {
 
   async function handleDelete() {
     const confirmDelete = await requestConfirmation({
-      title: 'Excluir Time',
+      title: 'Excluir equipe',
       description:
-        'Tem certeza que deseja excluir este Time? Essa ação não pode ser desfeita.',
+        'Tem certeza que deseja excluir esta equipe? Essa ação não pode ser desfeita.',
       confirmLabel: 'Excluir',
     })
 
@@ -224,7 +224,7 @@ export default function CompetitionTeams() {
 
     if (error) {
       logError('CompetitionTeams', error)
-      showError('Erro ao alterar status do Time.')
+      showError('Erro ao alterar status da equipe.')
       return
     }
 
@@ -242,14 +242,14 @@ export default function CompetitionTeams() {
     event.preventDefault()
 
     if (!activeCampId) {
-      showError('Selecione um acampamento antes de cadastrar Times.')
+      showError('Selecione um acampamento antes de cadastrar equipes.')
       return
     }
 
     const teamName = form.name.trim()
 
     if (!teamName) {
-      showError('Informe o nome do Time.')
+      showError('Informe o nome da equipe.')
       return
     }
 
@@ -278,7 +278,7 @@ export default function CompetitionTeams() {
 
     if (error) {
       logError('CompetitionTeams', error)
-      showError(getCompetitionTeamErrorMessage(error, 'Erro ao salvar Time.'))
+      showError(getCompetitionTeamErrorMessage(error, 'Erro ao salvar equipe.'))
       setSaving(false)
       return
     }
@@ -306,13 +306,13 @@ export default function CompetitionTeams() {
     <section>
       <PageHeader
         eyebrow="Competição"
-        title="Times"
-        description="Gerencie os Times competitivos usados em pontuações e gincanas do acampamento."
+        title="Equipes"
+        description="Gerencie as equipes competitivas usadas em pontuações e gincanas do acampamento."
       />
 
       {!activeCampId && (
         <div className="mb-6">
-          <ActiveCampNotice message="Selecione um acampamento para cadastrar e gerenciar Times." />
+          <ActiveCampNotice message="Selecione um acampamento para cadastrar e gerenciar equipes." />
         </div>
       )}
 
@@ -321,7 +321,7 @@ export default function CompetitionTeams() {
         className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6"
       >
         <h2 className="text-xl font-bold">
-          {editingId ? 'Editar Time' : 'Novo Time'}
+          {editingId ? 'Editar equipe' : 'Nova equipe'}
         </h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -329,7 +329,7 @@ export default function CompetitionTeams() {
             name="name"
             value={form.name}
             onChange={handleChange}
-            placeholder="Nome do Time"
+            placeholder="Nome da equipe"
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           />
 
@@ -370,8 +370,8 @@ export default function CompetitionTeams() {
             onChange={handleChange}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="active">Ativo</option>
-            <option value="inactive">Inativo</option>
+            <option value="active">Ativa</option>
+            <option value="inactive">Inativa</option>
           </select>
 
           <input
@@ -413,7 +413,7 @@ export default function CompetitionTeams() {
               ? 'Salvando...'
               : editingId
                 ? 'Salvar alterações'
-                : 'Criar Time'}
+                : 'Criar equipe'}
           </button>
         </div>
       </form>
@@ -421,10 +421,10 @@ export default function CompetitionTeams() {
       <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <h2 className="text-xl font-bold">Lista de Times</h2>
+            <h2 className="text-xl font-bold">Lista de equipes</h2>
 
             <p className="mt-2 text-sm text-zinc-400">
-              {teams.length} Time(s) cadastrado(s). {activeCount} ativo(s).
+              {teams.length} equipe(s) cadastrada(s). {activeCount} ativa(s).
             </p>
           </div>
         </div>
@@ -432,21 +432,21 @@ export default function CompetitionTeams() {
 
       <div className="mt-8">
         {loading ? (
-          <p className="text-zinc-400">Carregando Times...</p>
+          <p className="text-zinc-400">Carregando equipes...</p>
         ) : sortedTeams.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
             <h2 className="text-xl font-bold">
-              Nenhum Time cadastrado neste acampamento.
+              Nenhuma equipe cadastrada neste acampamento.
             </h2>
             <p className="mt-3 text-sm text-zinc-400">
-              Crie Times competitivos para organizar a pontuação e a gincana.
+              Crie equipes competitivas para organizar a pontuação e a gincana.
             </p>
             <button
               type="button"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               className="mt-5 rounded-xl bg-yellow-500 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-yellow-400"
             >
-              Criar Time
+              Criar equipe
             </button>
           </div>
         ) : (
@@ -471,7 +471,7 @@ export default function CompetitionTeams() {
                         : 'bg-zinc-700 text-zinc-300'
                     }`}
                   >
-                    {team.status === 'active' ? 'Ativo' : 'Inativo'}
+                    {team.status === 'active' ? 'Ativa' : 'Inativa'}
                   </span>
                 </div>
 

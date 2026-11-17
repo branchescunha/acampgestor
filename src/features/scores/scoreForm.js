@@ -30,16 +30,19 @@ export function validateScoreForm(form, activeCampId, legacyEditing = false) {
   }
 
   if (!legacyEditing && !form.competition_team_id) {
-    return 'Selecione um Time.'
+    return 'Selecione uma equipe.'
   }
 
   if (!form.category) {
     return 'Selecione uma categoria.'
   }
 
-  if (!form.points || !Number.isFinite(Number(form.points)) || Number(form.points) <= 0) {
+  if (!form.points || !Number.isInteger(Number(form.points)) || Number(form.points) <= 0 || Number(form.points) > 2147483647) {
     return 'Informe uma pontuação válida.'
   }
+
+  if (!legacyEditing && !form.reason?.trim()) return 'Informe o motivo do lançamento.'
+  if (!['POINT', 'PENALTY'].includes(form.type)) return 'Selecione um tipo de lançamento válido.'
 
   return ''
 }

@@ -3,6 +3,7 @@ import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
 import { getScoreCategories, getScoreTypeLabel } from '../domain/scoring'
+import { readAllPages } from '../features/scores/scoreTotals'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
@@ -31,7 +32,7 @@ export default function History() {
     async function loadData() {
       setLoading(true)
 
-      const { data: eventsData, error: eventsError } = await supabase
+      const { data: eventsData, error: eventsError } = await readAllPages(() => supabase
         .from('score_events')
         .select(
           `
@@ -48,6 +49,8 @@ export default function History() {
           gymkhana_event_id,
           room_inspection_id,
           created_at,
+          created_by,
+          is_voided,
           tribes (
             name,
             color,
@@ -66,6 +69,8 @@ export default function History() {
         )
         .eq('camp_id', activeCampId)
         .order('created_at', { ascending: false })
+        .order('id')
+      )
 
     const { data: tribesData, error: tribesError } = await supabase
       .from('tribes')
@@ -165,8 +170,8 @@ export default function History() {
   function getEventDestination(eventItem) {
     if (eventItem.competition_team_id || eventItem.competition_teams) {
       return {
-        label: eventItem.competition_teams?.name || 'Time não encontrado',
-        prefix: 'Time',
+        label: eventItem.competition_teams?.name || 'Equipe não encontrada',
+        prefix: 'Equipe',
         color: eventItem.competition_teams?.color,
         symbol: eventItem.competition_teams?.symbol,
       }
@@ -174,8 +179,8 @@ export default function History() {
 
     if (eventItem.tribe_id || eventItem.tribes) {
       return {
-        label: eventItem.tribes?.name || 'Equipe/Quarto não encontrada',
-        prefix: 'Equipe/Quarto',
+        label: eventItem.tribes?.name || 'Quarto não encontrado',
+        prefix: 'Quarto (legado)',
         color: eventItem.tribes?.color,
         symbol: eventItem.tribes?.symbol,
       }
@@ -191,8 +196,8 @@ export default function History() {
 
   function getEventParticipantLabel(eventItem) {
     if (eventItem.participants?.full_name) return eventItem.participants.full_name
-    if (eventItem.competition_team_id) return 'Time inteiro'
-    if (eventItem.tribe_id) return 'Equipe/Quarto inteiro'
+    if (eventItem.competition_team_id) return 'Equipe inteira'
+    if (eventItem.tribe_id) return 'Quarto inteiro'
     return 'Sem participante'
   }
 
@@ -333,6 +338,16 @@ export default function History() {
         <span className="text-zinc-400">{eventItem.reason || '-'}</span>
       ),
     },
+    {
+      key: 'status',
+      label: 'Situação',
+      render: (eventItem) => eventItem.is_voided ? 'Anulado' : 'Válido',
+    },
+    {
+      key: 'created_by',
+      label: 'Conta responsável',
+      render: (eventItem) => <span className="break-all text-xs text-zinc-400">{eventItem.created_by || 'Não registrada (legado)'}</span>,
+    },
   ]
 
   return (
@@ -374,7 +389,7 @@ export default function History() {
             name="search"
             value={filters.search}
             onChange={handleFilterChange}
-            placeholder="Buscar por motivo, Time, Equipe/Quarto ou participante"
+            placeholder="Buscar por motivo, equipe, quarto ou participante"
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 xl:col-span-2"
           />
 
@@ -391,7 +406,7 @@ export default function History() {
             }
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Todos os Times</option>
+            <option value="">Todas as equipes</option>
 
             {competitionTeams.map((team) => (
               <option key={team.id} value={team.id}>
@@ -413,7 +428,7 @@ export default function History() {
             }
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           >
-            <option value="">Todas as Equipes/Quartos</option>
+            <option value="">Todos os quartos</option>
 
             {tribes.map((tribe) => (
               <option key={tribe.id} value={tribe.id}>
