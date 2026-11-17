@@ -324,7 +324,27 @@ end $$;
 revoke all on function public.save_camp_score(uuid, uuid, text, uuid, jsonb) from public, anon;
 grant execute on function public.save_camp_score(uuid, uuid, text, uuid, jsonb) to authenticated;
 
--- Frontend writes must use the atomic functions; existing SELECT policies stay intact.
+-- Restrictive policies are ANDed with legacy permissive policies, including FOR ALL true.
+-- RPC owners bypass RLS intentionally; each RPC first calls check_camp_operation.
+do $$
+declare relation text;
+begin
+  foreach relation in array array['score_events', 'gymkhana_events', 'room_inspections'] loop
+    execute format('alter table public.%I enable row level security', relation);
+    execute format('drop policy if exists "Enforce result camp isolation" on public.%I', relation);
+    execute format(
+      'create policy "Enforce result camp isolation" on public.%I as restrictive for all to authenticated using (auth.uid() is not null and public.can_manage_camp(camp_id)) with check (auth.uid() is not null and public.can_manage_camp(camp_id))',
+      relation
+    );
+    execute format('drop policy if exists "Block anonymous result access" on public.%I', relation);
+    execute format(
+      'create policy "Block anonymous result access" on public.%I as restrictive for all to anon using (false) with check (false)',
+      relation
+    );
+  end loop;
+end $$;
+
+-- Frontend writes must use the atomic functions; authenticated SELECT stays camp-scoped.
 revoke all on public.score_events, public.gymkhana_events, public.room_inspections from public, anon, authenticated;
 do $$
 declare relation text; columns text;

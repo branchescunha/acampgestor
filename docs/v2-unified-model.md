@@ -1,6 +1,6 @@
 # Equipes e quartos unificados
 
-Implementação local dependente das migrations 015, 016 e 017. Nenhuma delas foi executada por esta implementação. Testes JavaScript não validam triggers, transações ou RLS reais.
+Implementação dependente das migrations 015, 016 e 017. O PostgreSQL confirmou o COMMIT do pacote em produção em 2026-11-17; a verificação independente pós-migration passou em transação somente leitura no PostgreSQL 17.6, incluindo estrutura, RLS e grants. Não reaplicar o pacote. Os fluxos de escrita das RPCs e o isolamento com usuários reais não foram comprovados por essa verificação estrutural ou pelos testes JavaScript.
 
 ## Modelo
 
@@ -29,12 +29,8 @@ Pontos antigos vinculados somente ao quarto entram na equipe quando houver essa 
 
 ## Validação e publicação
 
-1. Confirme o schema atual com `supabase/tests/017_unified_preflight.sql` e faça backup antes de qualquer escrita em produção.
-2. Use um Supabase isolado ou PostgreSQL 17 com o schema original, Auth, funções e policies existentes. As migrations 001–013 não recriam sozinhas todas as tabelas originais. Não copie dados pessoais para os testes.
-3. Aplique 015, depois 016 e depois 017 nesse ambiente. Execute as verificações da 016 antes da 017; a 017 altera os agregados para também representar equipes sem pontos.
-4. Siga [o procedimento de Staging](supabase-staging-validation.md), incluindo a baseline legada. Execute `supabase/tests/017_unified_model.sql` inteiro no SQL Editor do Staging, como postgres. O script exige o marcador de Staging, cria fixtures sintéticas, injeta uma falha e termina com rollback. Verifique também concorrência em duas sessões: uma inserindo participante e outra tentando trocar a equipe do quarto.
-5. Faça testes de interface com duas contas e ADMIN: criar equipe/quartos, vincular participante, lançar pontos/penalidades, premiar várias equipes, editar/anular resultados e conferir ranking público e Excel.
-6. Somente após a validação, reserve uma janela sem uso para aplicar manualmente 015 → 016 → 017 e publicar o frontend correspondente. O frontend anterior perde permissão de escrita nos resultados após 017; não deixe usuários operando durante essa transição.
-7. Reconcilie os quartos antigos e confira os totais antes da utilização real.
+O responsável optou pela aplicação direta no projeto existente, sem Staging. O procedimento atual é [publicação direta em produção](v2-production-release.md): backup atualizado, preflight somente leitura, pacote transacional 015 → 016 → 017, verificação de permissões e publicação coordenada do frontend. Não executar baseline, fixtures nem reaplicar 001–014 em produção.
 
-Se a aplicação de um arquivo falhar, sua transação deve ser desfeita por completo. Não publique o frontend dependente de uma migration que falhou. O banco isolado e os testes SQL ainda precisam ser executados: a implementação não está aprovada para produção apenas por passar em lint e build.
+O [procedimento de Staging](supabase-staging-validation.md) permanece apenas como alternativa documentada, não executada. Sem ensaio em PostgreSQL, os testes SQL, a concorrência e os caminhos internos das RPCs continuam não validados. A opção por produção direta não comprova essas propriedades.
+
+Se o pacote falhar antes do COMMIT, interrompa e reverta a transação inteira. Não publique o frontend dependente de uma migration que falhou. Após COMMIT, rollback apenas do frontend não desfaz permissões ou schema. Mantenha a janela sem usuários até concluir banco, frontend e verificações; reconcilie os quartos antigos antes de considerar o ranking definitivo.

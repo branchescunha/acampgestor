@@ -6,11 +6,19 @@ where n.nspname = 'public' and c.relname in (
   'gymkhana_events', 'room_inspections', 'camp_operation_audit', 'camp_operation_receipts'
 ) order by c.relname;
 
-select tablename, policyname, roles, cmd, qual, with_check
+select tablename, policyname, permissive, roles, cmd, qual, with_check
 from pg_policies where schemaname = 'public' and tablename in (
   'camps', 'competition_teams', 'tribes', 'participants', 'score_events',
   'gymkhana_events', 'room_inspections', 'camp_operation_audit', 'camp_operation_receipts'
 ) order by tablename, policyname;
+
+-- Expected: exactly six rows, all RESTRICTIVE/ALL; auth scoped by camp, anon false.
+select tablename, policyname, permissive, roles, cmd, qual, with_check
+from pg_policies
+where schemaname = 'public'
+  and tablename in ('score_events', 'gymkhana_events', 'room_inspections')
+  and policyname in ('Enforce result camp isolation', 'Block anonymous result access')
+order by tablename, policyname;
 
 select role_name, relation,
   has_table_privilege(role_name, 'public.' || relation, 'INSERT') as can_insert,

@@ -284,6 +284,16 @@ export default function Sidebar({ isMenuOpen = false, onClose }) {
       </div>
 
       <nav className="mt-6 space-y-6">
+        {isCampAdminRoute && (
+          <Link
+            to={isAdmin ? '/admin/acampamentos' : '/gestor'}
+            onClick={onClose}
+            className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm text-zinc-300 transition hover:bg-zinc-900 hover:text-white"
+          >
+            <TentTree size={18} aria-hidden="true" />
+            Meus acampamentos
+          </Link>
+        )}
         {isPlatformRoute && (
         <div>
           <p className="mb-2 px-4 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-600">

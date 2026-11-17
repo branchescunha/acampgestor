@@ -11,6 +11,7 @@ import { useUserProfile } from '../hooks/useUserProfile'
 
 const adminOperationPaths = [
   '/admin/equipes',
+  '/admin/quartos',
   '/admin/times',
   '/admin/participantes',
   '/admin/pontuacao',
@@ -105,7 +106,7 @@ export default function AdminLayout({ children }) {
       <div className="flex">
         <Sidebar isMenuOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-        <section className="min-h-screen flex-1 p-5 lg:p-8">
+        <section className="min-h-screen min-w-0 flex-1 p-5 lg:p-8">
           <header className="mb-8 flex items-center justify-between lg:hidden">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-yellow-500">
