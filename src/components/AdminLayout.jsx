@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import RoleAccessNotice from './RoleAccessNotice'
@@ -23,6 +23,14 @@ const adminOperationPaths = [
 
 export default function AdminLayout({ children }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  useEffect(() => {
+    if (!isMenuOpen) return
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setIsMenuOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [isMenuOpen])
   const location = useLocation()
   const { campSlug } = useParams()
   const {
@@ -122,6 +130,8 @@ export default function AdminLayout({ children }) {
               type="button"
               onClick={() => setIsMenuOpen(true)}
               aria-label="Abrir menu"
+              aria-expanded={isMenuOpen}
+              aria-controls="camp-navigation"
               className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-zinc-300 shadow-lg"
             >
               <Menu size={24} />

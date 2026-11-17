@@ -1,6 +1,6 @@
 # AcampGestor
 
-Plataforma web para gestão de acampamentos, retiros e eventos, com controle de organizações, acampamentos, Equipes/Quartos, Times competitivos, participantes, pontuações, gincanas, inspeções, ranking público e exportação em Excel.
+Plataforma web para gestão de acampamentos, retiros e eventos, com organizações, equipes competitivas, quartos, participantes, pontuações, gincanas, inspeções, ranking público e exportação em Excel.
 
 O AcampGestor separa a administração da plataforma, a gestão operacional de cada acampamento e a visualização pública dos rankings. A aplicação foi desenvolvida para igrejas, escolas e organizações que precisam gerenciar eventos com múltiplos responsáveis, dados isolados por acampamento e regras de acesso bem definidas.
 
@@ -40,10 +40,10 @@ Principais fluxos:
 ### Gestão do acampamento
 
 - painel por acampamento;
-- cadastro de Equipes/Quartos;
-- cadastro de Times competitivos;
+- cadastro de equipes competitivas;
+- cadastro de quartos por equipe;
 - cadastro de participantes;
-- vínculos opcionais com Equipe/Quarto e Time competitivo;
+- participantes vinculados à equipe e a um quarto dessa equipe;
 - lançamento de pontos e penalidades;
 - gincanas;
 - inspeções;
@@ -59,21 +59,21 @@ Principais fluxos:
 
 ## Modelo de Domínio
 
-O projeto separa organização operacional de competição.
+O modelo unificado da V2 utiliza as mesmas equipes nas competições e na organização dos quartos.
 
-**Equipe/Quarto** representa alojamento, organização interna e referência operacional do acampamento.
+**Equipe** participa da pontuação, das gincanas e do ranking do acampamento.
 
-**Time competitivo** representa a disputa de pontos, ranking e gincanas.
+**Quarto** pertence a uma equipe. Cada participante é vinculado à equipe e a um quarto dela.
 
 Exemplo:
 
 ```text
 Participante: Maria
-Equipe/Quarto: Levi
-Time competitivo: Azul
+Equipe: Azul
+Quarto: Levi
 ```
 
-Um participante pode possuir os dois vínculos, mas ambos são opcionais. Inspeções usam Equipes/Quartos. Pontuação, gincanas e ranking usam Times competitivos.
+Inspeções acontecem nos quartos e pontuam a equipe correspondente. Gincanas podem premiar várias equipes. Dados históricos são preservados; os nomes físicos `competition_teams` e `tribes` continuam no banco por compatibilidade.
 
 ## Perfis de Acesso
 
@@ -98,7 +98,7 @@ ADMIN e GESTOR utilizam painéis separados.
 
 ## Cadastro de Gestores
 
-O incremento local da V2 usa `/cadastro`, senha mínima de 6 caracteres e sessão imediata do Supabase Auth, sem aprovação administrativa ou confirmação de e-mail. Uma conta de responsável ou diretoria pode criar vários acampamentos independentes em Meus Acampamentos. A migration 014 foi aplicada em produção e suas verificações passaram, conforme informado pelo responsável. O frontend V2 ainda não foi publicado; cadastro e isolamento reais continuam pendentes de teste.
+O cadastro V2 usa `/cadastro`, senha mínima de 6 caracteres e sessão imediata do Supabase Auth, sem aprovação administrativa ou confirmação de e-mail. Uma conta de responsável ou diretoria pode criar vários acampamentos independentes em Meus Acampamentos. A migration 014 e o frontend estão publicados; habilitar novos cadastros depende da configuração do Supabase Auth.
 
 Solicitações, aprovações, convites e associação de membros por e-mail são desativados na V2, preservando os dados históricos. A Edge Function antiga foi desativada e validada com HTTP 410, conforme informado pelo responsável. A recuperação pública mostra um canal HTTPS somente quando configurado por `VITE_SUPPORT_URL`; sem configuração, informa que a recuperação assistida está indisponível. Consulte os riscos e a sequência de publicação em [cadastro V2](docs/v2-registration.md).
 
@@ -113,15 +113,15 @@ O acesso utiliza views públicas específicas para retornar somente os dados mí
 A exportação é feita por acampamento e gera um arquivo Excel com dados de:
 
 - acampamento;
-- Times competitivos;
-- Equipes/Quartos;
+- equipes;
+- quartos;
 - participantes;
 - histórico;
 - pontos;
 - penalidades;
 - gincanas;
 - inspeções;
-- estatísticas por Time.
+- estatísticas por equipe.
 
 ## Arquitetura e Segurança
 
@@ -132,7 +132,7 @@ A exportação é feita por acampamento e gera um arquivo Excel com dados de:
 - controle de acesso por organização e acampamento;
 - painéis separados para ADMIN e GESTOR;
 - views públicas mínimas para ranking;
-- Supabase Edge Function para onboarding;
+- fluxos legados de aprovação e convites bloqueados no backend;
 - validação de variáveis públicas no frontend;
 - exportação restrita a áreas autenticadas;
 - sanitização de textos na geração de Excel;
@@ -160,7 +160,7 @@ A exportação é feita por acampamento e gera um arquivo Excel com dados de:
 
 O projeto utiliza PostgreSQL por meio do Supabase, com schema e políticas de acesso versionados em `supabase/sql`.
 
-A estrutura contempla organizações, acampamentos, profiles, convites, Equipes/Quartos, Times competitivos, participantes, pontuação, gincanas e inspeções.
+A estrutura contempla organizações, acampamentos, profiles, convites históricos, equipes, quartos, participantes, pontuação, gincanas e inspeções. Novas pontuações e resultados usam RPCs transacionais, autoria e chaves de idempotência.
 
 ## Estrutura do Projeto
 
@@ -190,13 +190,14 @@ package.json
 
 ## Status
 
-O primeiro incremento da V2 (cadastro público de gestores e criação de acampamentos) está em desenvolvimento local. Consulte [configuração e validação do cadastro V2](docs/v2-registration.md) antes de habilitar o fluxo em um ambiente.
+O modelo unificado da V2 está publicado. As migrations 015–017 foram aplicadas, e as verificações estruturais de PostgreSQL, RLS e grants passaram em produção. Isso não substitui testes reais de escrita e isolamento com gestores. Consulte [o registro de publicação](docs/v2-production-release.md).
 
-Versão estável `v1.0.0` publicada.
+Interface com temas claro/escuro, destaque dourado e navegação responsiva. A release histórica `v1.0.0` permanece preservada.
 
-Validações históricas da release V1:
+Validações locais atuais:
 
-- 66 testes automatizados;
+- 109 testes automatizados;
+- 10 testes de integração em memória aprovados e 1 teste real ignorado;
 - lint aprovado;
 - build de produção aprovado.
 

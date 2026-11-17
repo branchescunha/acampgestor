@@ -258,11 +258,13 @@ export default function Sidebar({ isMenuOpen = false, onClose }) {
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-50 h-screen w-[85%] max-w-[320px] overflow-y-auto border-r border-zinc-800 bg-black p-5 transition-transform duration-300 lg:sticky lg:top-0 lg:min-h-screen lg:w-72 lg:translate-x-0 lg:bg-zinc-950 ${
+      id="camp-navigation"
+      aria-label="Navegação do painel"
+      className={`app-sidebar fixed left-0 z-50 w-[85%] max-w-[280px] overflow-y-auto border-r border-zinc-800 bg-zinc-950 p-4 transition-transform duration-300 lg:sticky lg:w-64 lg:translate-x-0 ${
         isMenuOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
-      <div className="flex items-start justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+      <div className="flex items-start justify-between gap-3 border-b border-zinc-800 px-3 pb-5 pt-2">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-yellow-500">
             AcampGestor

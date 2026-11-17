@@ -1,7 +1,7 @@
 export default function ResponsiveTable({ columns, data, emptyMessage }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-800">
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden overflow-x-auto md:block" tabIndex={0} role="region" aria-label="Tabela de registros">
         <table className="w-full min-w-[760px] border-collapse">
           <thead className="bg-zinc-900">
             <tr className="text-left text-sm">
@@ -62,7 +62,7 @@ export default function ResponsiveTable({ columns, data, emptyMessage }) {
                       {column.label}
                     </span>
 
-                    <div className="max-w-[65%] text-right text-sm leading-snug">
+                    <div className="min-w-0 max-w-[65%] break-words text-right text-sm leading-snug">
                       {column.render(item)}
                     </div>
                   </div>

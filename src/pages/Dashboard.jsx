@@ -129,6 +129,7 @@ export default function Dashboard() {
 
   const leader = ranking[0]
   const latestEvents = events.slice(0, 5)
+  const chartMaximum = Math.max(1, ...ranking.map((team) => Math.abs(team.total)))
 
   function formatPoints(value) {
     if (value > 0) return `+${value}`
@@ -156,12 +157,7 @@ export default function Dashboard() {
         description="Visão geral do evento."
       />
 
-      {activeCampName ? (
-        <div className="mb-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-sm text-yellow-100">
-          Acampamento ativo:{' '}
-          <strong className="text-white">{activeCampName}</strong>
-        </div>
-      ) : (
+      {!activeCampName && (
         <div className="mb-6">
           <ActiveCampNotice message="Crie ou selecione um acampamento para começar a organizar equipes, participantes e pontuações." />
         </div>
@@ -217,7 +213,26 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+      <section className="mt-8 border-t border-zinc-800 pt-6" aria-label="Classificação das equipes">
+        <h2 className="text-xl font-bold">Classificação</h2>
+        {ranking.length ? (
+          <ol className="mt-5 grid gap-4 sm:grid-cols-2">
+            {ranking.map((team, index) => (
+              <li key={team.id} className="min-w-0">
+                <div className="mb-2 flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 break-words font-semibold"><span className="mr-2 text-yellow-500">{index + 1}.</span>{team.name}</span>
+                  <strong className={`shrink-0 ${team.total < 0 ? 'text-red-400' : 'text-green-400'}`}>{team.total}</strong>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-zinc-800" aria-hidden="true">
+                  <div className={`h-full rounded-full ${team.total < 0 ? 'bg-red-400' : 'bg-yellow-500'}`} style={{ width: `${Math.abs(team.total) / chartMaximum * 100}%` }} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : <p className="mt-4 text-sm text-zinc-400">Nenhuma equipe cadastrada.</p>}
+      </section>
+
+      <div className="mt-8 border-t border-zinc-800 pt-6">
         <h2 className="text-xl font-bold">Últimos lançamentos</h2>
 
         {latestEvents.length === 0 ? (

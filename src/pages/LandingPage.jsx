@@ -8,7 +8,7 @@ import {
   ListChecks,
   School,
   ShieldCheck,
-  Swords,
+  BedDouble,
   TentTree,
   Trophy,
   Users,
@@ -18,7 +18,7 @@ const audiences = [
   {
     title: 'Igrejas',
     description:
-      'Organize retiros, congressos e acampamentos com Times competitivos e ranking público.',
+      'Organize retiros, congressos e acampamentos com equipes competitivas e ranking público.',
     icon: Building2,
   },
   {
@@ -40,8 +40,8 @@ const audiences = [
 
 const features = [
   ['Criação de acampamentos', TentTree],
-  ['Equipes/Quartos', Trophy],
-  ['Times competitivos', Swords],
+  ['Equipes', Trophy],
+  ['Quartos por equipe', BedDouble],
   ['Participantes', Users],
   ['Pontuação', BarChart3],
   ['Gincanas', ListChecks],
@@ -54,7 +54,7 @@ const features = [
 const benefits = [
   'Menos planilhas soltas',
   'Mais organização na operação',
-  'Ranking em tempo real',
+  'Ranking público por equipe',
   'Acesso público para acampantes',
   'Controle para gestores',
   'Visão geral para administradores',
@@ -66,15 +66,15 @@ const steps = [
   'O responsável ou a diretoria cria sua conta',
   'A conta acessa Meus Acampamentos',
   'O gestor cria o acampamento',
-  'Equipes/Quartos, Times e participantes são cadastrados',
+  'Equipes, quartos e participantes são cadastrados',
   'As pontuações são lançadas',
   'O ranking público pode ser compartilhado',
 ]
 
 const rankingPreview = [
-  { name: 'Time Azul', points: 980, color: 'bg-blue-500' },
-  { name: 'Time Verde', points: 850, color: 'bg-emerald-500' },
-  { name: 'Time Vermelho', points: 730, color: 'bg-red-500' },
+  { name: 'Equipe Azul', points: 980, color: 'bg-blue-500' },
+  { name: 'Equipe Verde', points: 850, color: 'bg-emerald-500' },
+  { name: 'Equipe Vermelha', points: 730, color: 'bg-red-500' },
 ]
 
 function PrimaryCta({ className = '' }) {
@@ -137,7 +137,7 @@ export default function LandingPage() {
             </p>
 
             <h1 className="mt-5 max-w-4xl text-4xl font-black leading-tight md:text-6xl">
-              Gestão de acampamentos com Times, pontuação e ranking público.
+              Gestão de acampamentos com equipes, pontuação e ranking público.
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-300 md:text-lg">
@@ -185,7 +185,7 @@ export default function LandingPage() {
             <div className="mt-5 grid min-w-0 grid-cols-3 gap-2 text-center text-xs sm:gap-3 sm:text-sm">
               <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
                 <strong className="block text-lg leading-tight sm:text-xl">8</strong>
-                <span className="block break-words leading-tight text-zinc-400">times</span>
+                  <span className="block break-words leading-tight text-zinc-400">equipes</span>
               </div>
               <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
                 <strong className="block text-lg leading-tight sm:text-xl">142</strong>
@@ -206,7 +206,7 @@ export default function LandingPage() {
             Para quem é
           </p>
           <h2 className="mt-4 text-3xl font-black md:text-4xl">
-            Feito para quem organiza eventos com grupos e Times.
+            Feito para quem organiza eventos com equipes e quartos.
           </h2>
 
           <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -364,7 +364,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-zinc-400 md:flex-row md:items-center md:justify-between">
           <strong className="text-white">AcampGestor</strong>
           <span>
-            Plataforma para gestão de acampamentos, Times e rankings.
+            Plataforma para gestão de acampamentos, equipes e rankings.
           </span>
         </div>
       </footer>
