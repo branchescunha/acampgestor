@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
 import { normalizeScoreAmount } from '../domain/scoring'
+import { createOperationGuard, isValidOperationPoints } from '../features/scoringOperations'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
@@ -38,6 +39,7 @@ export default function Inspections() {
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const operationGuard = useRef(createOperationGuard())
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
   const { showError } = useToast()
@@ -92,6 +94,8 @@ export default function Inspections() {
     let shouldIgnore = false
 
     const timeoutId = window.setTimeout(() => {
+      setForm(initialForm)
+      setEditingId(null)
       void loadData(() => shouldIgnore)
     }, 0)
 
@@ -170,6 +174,11 @@ export default function Inspections() {
       return
     }
 
+    if (!tribes.some((tribe) => tribe.id === form.tribe_id)) {
+      showError('Selecione uma equipe deste acampamento.')
+      return
+    }
+
     if (!form.inspection_day) {
       showError('Selecione o dia da inspeção.')
       return
@@ -180,11 +189,12 @@ export default function Inspections() {
       return
     }
 
-    if (form.points === '') {
-      showError('Informe a quantidade de pontos.')
+    if (!isValidOperationPoints(form.points, { allowZero: true })) {
+      showError('Informe uma quantidade válida de pontos.')
       return
     }
 
+    if (!operationGuard.current.acquire()) return
     setSaving(true)
 
     try {
@@ -234,13 +244,15 @@ export default function Inspections() {
       await loadData()
     } catch (error) {
       logError('Inspections', error)
-      showError('Erro ao salvar inspeção.')
+      showError('Operação incompleta. Confira a inspeção e a pontuação antes de tentar novamente.')
     } finally {
+      operationGuard.current.release()
       setSaving(false)
     }
   }
 
   async function handleDelete() {
+    if (!operationGuard.current.acquire()) return
     const confirmDelete = await requestConfirmation({
       title: 'Excluir inspeção',
       description:
@@ -248,7 +260,10 @@ export default function Inspections() {
       confirmLabel: 'Excluir',
     })
 
-    if (!confirmDelete) return
+    if (!confirmDelete) {
+      operationGuard.current.release()
+      return
+    }
 
     setSaving(true)
 
@@ -274,8 +289,9 @@ export default function Inspections() {
       await loadData()
     } catch (error) {
       logError('Inspections', error)
-      showError('Erro ao excluir inspeção.')
+      showError('Exclusão incompleta. Confira a inspeção e a pontuação antes de tentar novamente.')
     } finally {
+      operationGuard.current.release()
       setSaving(false)
     }
   }

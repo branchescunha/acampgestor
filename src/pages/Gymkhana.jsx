@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
+import { createOperationGuard, isValidOperationPoints } from '../features/scoringOperations'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
@@ -30,6 +31,7 @@ export default function Gymkhana() {
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const operationGuard = useRef(createOperationGuard())
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
   const { showError } = useToast()
@@ -239,11 +241,12 @@ export default function Gymkhana() {
       return
     }
 
-    if (!form.points_per_member || Number(form.points_per_member) <= 0) {
+    if (!isValidOperationPoints(form.points_per_member)) {
       showError('Informe uma pontuação válida para o resultado.')
       return
     }
 
+    if (!operationGuard.current.acquire()) return
     setSaving(true)
 
     try {
@@ -296,8 +299,9 @@ export default function Gymkhana() {
       await loadData()
     } catch (error) {
       logError('Gymkhana', error)
-      showError('Erro ao salvar resultado da gincana.')
+      showError('Operação incompleta. Confira a gincana e a pontuação antes de tentar novamente.')
     } finally {
+      operationGuard.current.release()
       setSaving(false)
     }
   }
@@ -322,6 +326,7 @@ export default function Gymkhana() {
   }
 
   async function handleDelete(eventItem) {
+    if (!operationGuard.current.acquire()) return
     const confirmDelete = await requestConfirmation({
       title: 'Excluir lançamento da gincana',
       description:
@@ -329,7 +334,10 @@ export default function Gymkhana() {
       confirmLabel: 'Excluir',
     })
 
-    if (!confirmDelete) return
+    if (!confirmDelete) {
+      operationGuard.current.release()
+      return
+    }
 
     setSaving(true)
 
@@ -358,8 +366,9 @@ export default function Gymkhana() {
       await loadData()
     } catch (error) {
       logError('Gymkhana', error)
-      showError('Erro ao excluir lançamento da gincana.')
+      showError('Exclusão incompleta. Confira a gincana e a pontuação antes de tentar novamente.')
     } finally {
+      operationGuard.current.release()
       setSaving(false)
     }
   }
