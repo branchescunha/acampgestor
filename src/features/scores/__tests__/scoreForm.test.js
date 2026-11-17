@@ -16,6 +16,17 @@ test('validateScoreForm requires a competition team for new scores', () => {
   )
 })
 
+test('validateScoreForm rejects non-finite and non-positive amounts', () => {
+  for (const points of ['NaN', 'Infinity', '-Infinity', '0', '-1']) {
+    assert.ok(validateScoreForm({
+      ...initialScoreForm,
+      competition_team_id: 'team-1',
+      category: 'Geral',
+      points,
+    }, 'camp-1'))
+  }
+})
+
 test('validateScoreForm allows legacy editing with tribe only', () => {
   assert.equal(
     validateScoreForm(

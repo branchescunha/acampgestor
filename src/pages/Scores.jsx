@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
@@ -30,6 +30,7 @@ export default function Scores() {
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
   const { showError } = useToast()
@@ -111,6 +112,11 @@ export default function Scores() {
             eventsError
         )
         if (shouldIgnore) return
+        setTribes([])
+        setCompetitionTeams([])
+        setParticipants([])
+        setEvents([])
+        showError('Erro ao carregar pontuações.')
         setLoading(false)
         return
       }
@@ -142,7 +148,7 @@ export default function Scores() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [activeCampId])
+  }, [activeCampId, showError])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -195,6 +201,7 @@ export default function Scores() {
 
     if (error) {
       logError('Scores', error)
+      showError('Não foi possível atualizar a lista de lançamentos.')
       return
     }
 
@@ -306,6 +313,8 @@ export default function Scores() {
   async function handleSubmit(event) {
     event.preventDefault()
 
+    if (savingRef.current) return
+
     if (!activeCampId) {
       showError('Selecione um acampamento antes de lançar pontuações.')
       return
@@ -324,39 +333,46 @@ export default function Scores() {
       return
     }
 
+    savingRef.current = true
     setSaving(true)
 
-    const payload = buildScorePayload(form, activeCampId, isLegacyEditing)
+    try {
+      const payload = buildScorePayload(form, activeCampId, isLegacyEditing)
 
-    const request = editingId
-      ? supabase
-          .from('score_events')
-          .update(payload)
-          .eq('id', editingId)
-          .eq('camp_id', activeCampId)
-      : supabase.from('score_events').insert(payload)
+      const request = editingId
+        ? supabase
+            .from('score_events')
+            .update(payload)
+            .eq('id', editingId)
+            .eq('camp_id', activeCampId)
+        : supabase.from('score_events').insert(payload)
 
-    const { error } = await request
+      const { error } = await request
 
-    if (error) {
+      if (error) {
+        logError('Scores', error)
+        const message =
+          `${error.message || ''} ${error.details || ''}`.toLowerCase()
+        showError(
+          error.code === '23503' ||
+            error.code === '23514' ||
+            message.includes('foreign key')
+            ? 'O Time selecionado não pertence a este acampamento.'
+            : 'Erro ao salvar lançamento.'
+        )
+        return
+      }
+
+      setForm(initialScoreForm)
+      setEditingId(null)
+      await reloadEvents()
+    } catch (error) {
       logError('Scores', error)
-      const message =
-        `${error.message || ''} ${error.details || ''}`.toLowerCase()
-      showError(
-        error.code === '23503' ||
-          error.code === '23514' ||
-          message.includes('foreign key')
-          ? 'O Time selecionado não pertence a este acampamento.'
-          : 'Erro ao salvar lançamento.'
-      )
+      showError('Erro ao salvar lançamento.')
+    } finally {
+      savingRef.current = false
       setSaving(false)
-      return
     }
-
-    setForm(initialScoreForm)
-    setEditingId(null)
-    await reloadEvents()
-    setSaving(false)
   }
 
   const activeCompetitionTeams = useMemo(() => {

@@ -37,7 +37,7 @@ export function validateScoreForm(form, activeCampId, legacyEditing = false) {
     return 'Selecione uma categoria.'
   }
 
-  if (!form.points || Number(form.points) <= 0) {
+  if (!form.points || !Number.isFinite(Number(form.points)) || Number(form.points) <= 0) {
     return 'Informe uma pontuação válida.'
   }
 
