@@ -1,8 +1,10 @@
 # Correcoes finais: quartos e inspecoes
 
-Migration 018 preparada localmente, **nao aplicada nem testada em PostgreSQL**. Nao reaplicar 001-017. O frontend completo depende da nova coluna; nao publicar antes da atualizacao do banco.
+Migration 018 **aplicada em producao em 18/11/2026**, em transacao, com SSL `verify-full`. Ausencia dos objetos confirmada por consulta somente leitura antes da aplicacao; checks estruturais e de seguranca aprovados depois. Nao reaplicar 001-018. Operacoes reais de gestores e restauracao do backup continuam sem validacao nesta execucao.
 
-Ranking sem entradas administrativas e quartos com tipo controlado/cor herdada estao no commit independente `2442d8b`, compativel com o banco atual. Os formularios de configuracao e inspecoes ficam na branch `fix/v2-inspection-schedule`, aguardando 018.
+Ranking sem entradas administrativas e quartos com tipo controlado/cor herdada estao no commit independente `2442d8b`. Os formularios de configuracao e inspecoes estao no commit `251f1df`; a dependencia da 018 foi satisfeita antes da integracao/publicacao na main.
+
+Preflight e backup atualizado foram reutilizados na retomada, sem nova exportacao. Backup custom de 536759 bytes, com leitura integral/listagem verificadas; nenhuma restauracao foi realizada. O psql nativo foi aberto diretamente no console, sem pipeline, com senha interativa unica e sem armazenamento. Codigo de saida zero e marcador `V2_INSPECTION_SCHEDULE_VERIFIED` confirmados. Snapshots antes/depois preservaram os dados de acampamentos, quartos, equipes, participantes, inspecoes e pontuacoes, alem das policies e definicoes das RPCs/autorizacao existentes. Nenhum registro sintetico foi criado.
 
 ## Modelo e compatibilidade
 
@@ -14,11 +16,11 @@ Ranking sem entradas administrativas e quartos com tipo controlado/cor herdada e
 - A cor exibida e derivada da equipe atual; a coluna antiga tribes.color nao e apagada e recebe cor apenas ao criar um quarto, por ser NOT NULL. Alterar a cor da equipe nao exige regravar quartos.
 - Gestores configuram turnos ao criar/editar em `/gestor`. ADMIN usa `/admin/acampamentos`. A edicao do gestor nao altera ownership, status ou permissao publica do acampamento.
 
-## Aplicacao controlada
+## Procedimento utilizado (nao reaplicar)
 
 1. Gerar backup atualizado com `scripts/backup-supabase-production.ps1`; manter janela sem lancamentos enquanto aplicar 018.
 2. Executar somente leitura `supabase/tests/018_inspection_schedule_preflight.sql`. `schedule_already_exists` e `validator_already_exists` devem ser false; RPC existente e RLS devem ser true. Tipos/turnos legados nao bloqueiam a instalacao e serao preservados. Se ja houver objetos 018, parar e conferir; nao reaplicar.
-3. Revisar e autorizar a aplicacao manual de `supabase/sql/018_configure_inspection_schedule.sql` inteiro no SQL Editor. Ele possui BEGIN/COMMIT e timeouts; erro deve impedir COMMIT. Nenhum SQL foi enviado ao banco nesta implementacao. Nao declarar validacao de runtime apenas por revisao estatica.
+3. Revisar e aplicar `supabase/sql/018_configure_inspection_schedule.sql` inteiro, com BEGIN/COMMIT, timeouts e psql `ON_ERROR_STOP`. Aplicacao ja concluida; nao executar novamente. A primeira tentativa falhou antes da conexao por falta de senha; a retomada confirmou a ausencia dos objetos por leitura antes de aplicar somente 018.
 4. Executar `supabase/tests/018_inspection_schedule_checks.sql`, somente leitura. Esperado: nenhuma excecao, invalid_camp_schedules=0 e V2_INSPECTION_SCHEDULE_VERIFIED. Esses checks validam estrutura e a funcao pura, nao a execucao dos triggers em escritas reais.
 5. Publicar o frontend da branch de correcao somente depois de confirmar o banco. O frontend anterior continua compativel com NULL; apos configurar turnos novos, ele nao apresenta todas as novas opcoes. Aplicar e publicar na mesma janela.
 
