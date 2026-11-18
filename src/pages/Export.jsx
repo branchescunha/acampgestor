@@ -11,6 +11,7 @@ import { sanitizeExcelRow } from '../features/export/sanitizeExcelValue'
 import { formatDateOnly } from '../utils/date'
 import { useToast } from '../hooks/useToast'
 import { logError } from '../utils/logger'
+import { getRoomColor } from '../features/rooms/roomForm'
 
 export default function Export() {
   const [loading, setLoading] = useState(false)
@@ -553,7 +554,7 @@ export default function Export() {
             id: tribe.id,
             name: tribe.name,
             symbol: tribe.symbol,
-            color: tribe.color,
+            color: getRoomColor(tribe, competitionTeams),
             room_type: tribe.room_type || '',
             competition_team_id: tribe.competition_team_id || '',
             competition_team_name: competitionTeams.find(

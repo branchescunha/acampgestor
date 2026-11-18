@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { calculateRanking } from '../domain/ranking'
 import { loadCampScoreTotals, readAllPages, totalsAsScoreEntries } from '../features/scores/scoreTotals'
 import { supabase } from '../lib/supabase'
@@ -133,12 +133,6 @@ export default function PublicCampRanking() {
             )}
           </div>
 
-          <Link
-            to="/login"
-            className="rounded-2xl border border-zinc-800 px-5 py-4 text-center text-sm transition hover:border-yellow-500 hover:text-yellow-500 md:text-base"
-          >
-            Área administrativa
-          </Link>
         </div>
 
         {loading ? (
@@ -155,21 +149,6 @@ export default function PublicCampRanking() {
               Confira o link com a organização do acampamento.
             </p>
 
-            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-              <Link
-                to="/login"
-                className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800"
-              >
-                Área administrativa
-              </Link>
-
-              <Link
-                to="/cadastro"
-                className="rounded-xl bg-yellow-500 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-yellow-400"
-              >
-                Criar conta de gestor
-              </Link>
-            </div>
           </div>
         ) : ranking.length === 0 ? (
           <div className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center">

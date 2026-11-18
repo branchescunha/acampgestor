@@ -6,25 +6,13 @@ import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import { ROOM_TYPES, getRoomColor, validateRoomType } from '../features/rooms/roomForm'
 
-const colorOptions = [
-  { name: 'Dourado', value: '#eab308' },
-  { name: 'Azul', value: '#3b82f6' },
-  { name: 'Rosa', value: '#ec4899' },
-  { name: 'Verde', value: '#22c55e' },
-  { name: 'Vermelho', value: '#ef4444' },
-  { name: 'Roxo', value: '#8b5cf6' },
-  { name: 'Laranja', value: '#f97316' },
-  { name: 'Ciano', value: '#06b6d4' },
-  { name: 'Lima', value: '#84cc16' },
-]
-
-const roomTypes = ['Masculino', 'Feminino', 'Outros']
+const roomTypes = ROOM_TYPES
 
 const initialForm = {
   name: '',
   symbol: '',
-  color: '#eab308',
   room_type: '',
   room_name: '',
   leader_name: '',
@@ -74,7 +62,7 @@ export default function CampGroups() {
 
       const { data: teamsData, error: teamsError } = await supabase
         .from('competition_teams')
-        .select('id, camp_id, name, status')
+        .select('id, camp_id, name, color, status')
         .eq('camp_id', activeCampId)
         .order('name')
 
@@ -180,7 +168,6 @@ export default function CampGroups() {
     setForm({
       name: tribe.name || '',
       symbol: tribe.symbol || '',
-      color: tribe.color || '#eab308',
       room_type: tribe.room_type || '',
       room_name: tribe.room_name || '',
       leader_name: tribe.leader_name || '',
@@ -244,13 +231,18 @@ export default function CampGroups() {
       return
     }
 
+    const originalRoom = tribes.find(room => room.id === editingId)
+    const typeError = validateRoomType(form.room_type, originalRoom?.room_type, Boolean(editingId))
+    if (typeError) { showError(typeError); return }
     setSaving(true)
 
     const payload = {
       name: form.name.trim(),
       symbol: form.symbol.trim(),
-      color: form.color,
-      room_type: form.room_type.trim() || null,
+      ...(!editingId ? { color: getRoomColor({ camp_id: activeCampId, competition_team_id: form.competition_team_id }, teams) } : {}),
+      room_type: editingId && form.room_type === (originalRoom?.room_type || '')
+        ? originalRoom.room_type
+        : form.room_type,
       competition_team_id: form.competition_team_id,
       room_name: form.room_name.trim() || null,
       leader_name: form.leader_name.trim() || null,
@@ -281,7 +273,8 @@ export default function CampGroups() {
     setSaving(false)
   }
 
-  const selectedColor = colorOptions.find((color) => color.value === form.color)
+  const selectedColor = getRoomColor({ camp_id: activeCampId, competition_team_id: form.competition_team_id }, teams)
+  const editingRoom = tribes.find(room => room.id === editingId)
 
   const teamsById = useMemo(
     () => new Map(teams.map((team) => [team.id, team])),
@@ -371,43 +364,32 @@ export default function CampGroups() {
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           />
 
-          <select
-            name="color"
-            value={form.color}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            {colorOptions.map((color) => (
-              <option key={color.value} value={color.value}>
-                {color.name}
-              </option>
-            ))}
-          </select>
-
           <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3">
             <div
               className="h-6 w-6 rounded-lg"
-              style={{ backgroundColor: form.color }}
+              style={{ backgroundColor: selectedColor }}
             />
             <span className="text-sm text-zinc-300">
-              {selectedColor?.name || 'Cor selecionada'}
+              Cor da equipe
             </span>
           </div>
 
-          <input
+          <select
             name="room_type"
             value={form.room_type}
             onChange={handleChange}
-            list="room-types"
             aria-label="Tipo de quarto"
-            placeholder="Tipo de quarto, opcional"
+            required={!editingId}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          />
-          <datalist id="room-types">
+          >
+            <option value="">Selecione o tipo</option>
+            {editingRoom?.room_type && !ROOM_TYPES.includes(editingRoom.room_type) && (
+              <option value={editingRoom.room_type}>{editingRoom.room_type} (legado)</option>
+            )}
             {roomTypes.map((roomType) => (
-              <option key={roomType} value={roomType} />
+              <option key={roomType} value={roomType}>{roomType}</option>
             ))}
-          </datalist>
+          </select>
 
           <select
             name="competition_team_id"
@@ -559,7 +541,7 @@ export default function CampGroups() {
                   <div className="flex items-start justify-between gap-4">
                     <div
                       className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl"
-                      style={{ backgroundColor: tribe.color }}
+                      style={{ backgroundColor: getRoomColor(tribe, teams) }}
                     >
                       {tribe.symbol}
                     </div>
