@@ -30,7 +30,7 @@ export default function ThemeToolbar() {
     <header className="app-toolbar">
       <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
       <a href="/" className="app-wordmark" aria-label="AcampGestor — início">
-        <img src="/favicon.svg" width="25" height="25" alt="" />
+        <img src="/favicon.svg?v=2" width="25" height="25" alt="" />
         AcampGestor
       </a>
       <button type="button" onClick={toggleTheme} aria-label={label} title={label} className="theme-toggle">
