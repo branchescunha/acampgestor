@@ -1,4 +1,5 @@
 import { getSlugValidationError } from '../../utils/slug.js'
+import { isValidInspectionSchedule } from '../inspections/inspectionSchedule.js'
 
 export const initialNewCampForm = {
   name: '',
@@ -7,6 +8,7 @@ export const initialNewCampForm = {
   theme: '',
   start_date: '',
   end_date: '',
+  inspection_schedule: [],
 }
 
 export function validateNewCamp(form) {
@@ -18,6 +20,7 @@ export function validateNewCamp(form) {
   if (form.start_date && form.end_date && form.end_date < form.start_date) {
     return 'A data de fim não pode ser anterior à data de início.'
   }
+  if (!isValidInspectionSchedule(form.inspection_schedule ?? [])) return 'Confira os dias e horários das inspeções.'
   return ''
 }
 
@@ -37,5 +40,6 @@ export function buildNewCampPayload(form, userId) {
     public_ranking_enabled: true,
     organization_id: null,
     created_by: userId,
+    inspection_schedule: (form.inspection_schedule ?? []).map(slot => ({ ...slot })),
   }
 }

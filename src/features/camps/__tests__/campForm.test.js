@@ -58,7 +58,16 @@ test('new camp remains independent and its owner comes only from the authenticat
     public_ranking_enabled: true,
     organization_id: null,
     created_by: 'authenticated-user',
+    inspection_schedule: [],
   })
   assert.equal(supplied.organization_id, 'third-party-org')
   assert.throws(() => buildNewCampPayload(camp, ''))
+})
+
+test('configuracao de inspecoes persiste no novo acampamento sem compartilhar arrays', () => {
+  const slots = [{ day: 'Segunda', period: 'Noite' }, { day: 'Domingo', period: 'Tarde' }]
+  const payload = buildNewCampPayload({ ...camp, inspection_schedule: slots }, 'authenticated-user')
+  assert.deepEqual(payload.inspection_schedule, slots)
+  assert.notEqual(payload.inspection_schedule, slots)
+  assert.ok(validateNewCamp({ ...camp, inspection_schedule: [{ day: 'Segunda', period: 'Outro' }] }))
 })

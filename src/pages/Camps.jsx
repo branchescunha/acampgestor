@@ -8,6 +8,9 @@ import { supabase } from '../lib/supabase'
 import { formatDateOnly } from '../utils/date'
 import { generateSlug, getSlugValidationError } from '../utils/slug'
 import { logError } from '../utils/logger'
+import InspectionScheduleFields from '../components/InspectionScheduleFields'
+import { getInspectionSchedule, includeUsedInspectionSlots, isValidInspectionSchedule } from '../features/inspections/inspectionSchedule'
+import { useUsedInspectionSlots } from '../hooks/useUsedInspectionSlots'
 
 const initialForm = {
   name: '',
@@ -19,6 +22,7 @@ const initialForm = {
   slug: '',
   public_ranking_enabled: true,
   organization_id: '',
+  inspection_schedule: [],
 }
 
 const statusLabels = {
@@ -40,6 +44,7 @@ export default function Camps() {
   const [organizations, setOrganizations] = useState([])
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
+  const { usedSlots, loading: loadingSlots, error: slotsError } = useUsedInspectionSlots(editingId)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -71,6 +76,7 @@ export default function Camps() {
         slug,
         public_ranking_enabled,
         organization_id,
+        inspection_schedule,
         created_by,
         created_at,
         updated_at,
@@ -140,6 +146,8 @@ export default function Camps() {
   }
 
   function validateForm() {
+    if (loadingSlots || slotsError) return slotsError || 'Aguarde a verificação dos turnos utilizados.'
+    if (!isValidInspectionSchedule(form.inspection_schedule)) return 'Confira os dias e horários das inspeções.'
     if (!form.name.trim()) {
       return 'Informe o nome do acampamento.'
     }
@@ -179,6 +187,7 @@ export default function Camps() {
       slug: camp.slug || '',
       public_ranking_enabled: camp.public_ranking_enabled ?? true,
       organization_id: camp.organization_id || '',
+      inspection_schedule: getInspectionSchedule(camp.inspection_schedule),
     })
     setSlugTouched(true)
     setError('')
@@ -233,6 +242,7 @@ export default function Camps() {
       slug: form.slug.trim() || null,
       public_ranking_enabled: form.public_ranking_enabled,
       organization_id: form.organization_id || null,
+      inspection_schedule: includeUsedInspectionSlots(form.inspection_schedule, usedSlots),
       updated_at: new Date().toISOString(),
     }
 
@@ -259,7 +269,7 @@ export default function Camps() {
       setError(
         saveError.code === '23505'
           ? 'Essa URL pública já está em uso. Escolha outra.'
-          : 'Não foi possível salvar o acampamento.',
+          : saveError.code === '23514' ? 'Confira os turnos: os já utilizados em inspeções não podem ser removidos.' : 'Não foi possível salvar o acampamento.',
       )
       setSaving(false)
       return
@@ -570,6 +580,11 @@ export default function Camps() {
             <span className="min-w-0 leading-tight">Ranking público ativo</span>
           </label>
 
+          <div className="md:col-span-2">
+            <InspectionScheduleFields value={includeUsedInspectionSlots(form.inspection_schedule, usedSlots)} usedSlots={usedSlots} disabled={saving || loadingSlots || Boolean(slotsError)} onChange={value => setForm(current => ({ ...current, inspection_schedule: value }))} />
+            {slotsError && <p role="alert" className="mt-3 text-sm text-red-300">{slotsError}</p>}
+          </div>
+
           <div className="flex min-w-0 flex-col justify-end gap-3 sm:flex-row md:items-end md:justify-end">
             {editingId && (
               <button
@@ -583,7 +598,7 @@ export default function Camps() {
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || loadingSlots || Boolean(slotsError)}
               className="w-full rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {saving ? 'Salvando...' : 'Salvar'}

@@ -37,6 +37,7 @@ export default function Gestor() {
   const [loadingCamps, setLoadingCamps] = useState(true)
   const [error, setError] = useState('')
   const [creatingCamp, setCreatingCamp] = useState(false)
+  const [editingCamp, setEditingCamp] = useState(null)
   const [success, setSuccess] = useState('')
 
   const loadCamps = useCallback(async () => {
@@ -45,7 +46,7 @@ export default function Gestor() {
 
     const { data, error: campsError } = await supabase
       .from('camps')
-      .select('id, name, slug, church_name, theme, status')
+      .select('id, name, slug, church_name, theme, status, start_date, end_date, inspection_schedule')
       .order('name', { ascending: true })
 
     if (campsError) {
@@ -151,6 +152,7 @@ export default function Gestor() {
               type="button"
               onClick={() => {
                 setCreatingCamp(true)
+                setEditingCamp(null)
                 setSuccess('')
               }}
               disabled={creatingCamp}
@@ -176,14 +178,17 @@ export default function Gestor() {
           </p>
         )}
 
-        {creatingCamp && (
+        {(creatingCamp || editingCamp) && (
           <CreateCampForm
+            key={editingCamp?.id || 'new'}
+            camp={editingCamp}
             userId={session.user.id}
-            onCancel={() => setCreatingCamp(false)}
+            onCancel={() => { setCreatingCamp(false); setEditingCamp(null) }}
             onCreated={async () => {
               setCreatingCamp(false)
+              setEditingCamp(null)
               await loadCamps()
-              setSuccess('Acampamento criado. Selecione-o para começar a gestão.')
+              setSuccess(editingCamp ? 'Acampamento atualizado.' : 'Acampamento criado. Selecione-o para começar a gestão.')
             }}
           />
         )}
@@ -242,19 +247,23 @@ export default function Gestor() {
                     <p className="mt-5 text-sm text-zinc-500">
                       Este acampamento ainda não possui URL de acesso.
                     </p>
+                    <button type="button" className="mt-5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800" onClick={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>Editar acampamento</button>
                   </div>
                 )
               }
 
               return (
+                <article key={camp.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
                 <Link
                   key={camp.id}
                   to={`/${camp.slug}/gestor`}
                   onClick={() => setActiveCamp(camp)}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 transition hover:border-yellow-500/60 hover:bg-zinc-900/80"
+                  className="block transition hover:text-yellow-400"
                 >
                   {content}
                 </Link>
+                <button type="button" className="mt-5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800" onClick={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>Editar acampamento</button>
+                </article>
               )
             })}
           </div>

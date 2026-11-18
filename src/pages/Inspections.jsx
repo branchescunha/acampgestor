@@ -13,33 +13,25 @@ import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import { getInspectionSchedule, getInspectionRoomOptions, validateInspectionSelection, INSPECTION_DAYS } from '../features/inspections/inspectionSchedule'
+import { getRoomColor } from '../features/rooms/roomForm'
 
 const initialForm = {
+  competition_team_id: '',
   tribe_id: '',
-  inspection_day: 'Sexta',
-  inspection_period: 'Noite',
+  inspection_day: '',
+  inspection_period: '',
   type: 'POINT',
   points: '',
   notes: '',
   has_photo: false,
 }
 
-const availablePeriods = {
-  Sexta: ['Noite'],
-  Sábado: ['Manhã', 'Tarde', 'Noite'],
-  Domingo: ['Manhã', 'Tarde'],
-}
-
-const inspectionSchedule = {
-  Sexta: ['Noite'],
-  Sábado: ['Manhã', 'Tarde', 'Noite'],
-  Domingo: ['Manhã', 'Tarde'],
-}
-
 export default function Inspections() {
   const [tribes, setTribes] = useState([])
   const [competitionTeams, setCompetitionTeams] = useState([])
   const [inspections, setInspections] = useState([])
+  const [configuration, setConfiguration] = useState({ campId: null, value: null })
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -49,6 +41,18 @@ export default function Inspections() {
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
   const { showError } = useToast()
+  const scheduleReady = configuration.campId === activeCampId && Boolean(activeCampId)
+  const schedule = useMemo(() => getInspectionSchedule(configuration.value), [configuration.value])
+  const inspectionSchedule = useMemo(() => schedule.reduce((days, slot) => {
+    days[slot.day] = [...(days[slot.day] || []), slot.period]
+    return days
+  }, {}), [schedule])
+  const originalInspection = inspections.find(inspection => inspection.id === editingId)
+  const availablePeriods = { ...inspectionSchedule }
+  if (originalInspection?.inspection_day && originalInspection.inspection_period) {
+    const day = originalInspection.inspection_day
+    availablePeriods[day] = [...new Set([...(availablePeriods[day] || []), originalInspection.inspection_period])]
+  }
 
   const loadData = useCallback(
     async (shouldIgnore = () => false) => {
@@ -58,9 +62,13 @@ export default function Inspections() {
         setTribes([])
         setCompetitionTeams([])
         setInspections([])
+        setConfiguration({ campId: null, value: null })
         setLoading(false)
         return
       }
+
+      const { data: campData, error: campError } = await supabase.from('camps')
+        .select('id, inspection_schedule').eq('id', activeCampId).maybeSingle()
 
       const { data: tribesData, error: tribesError } = await supabase
         .from('tribes')
@@ -76,6 +84,7 @@ export default function Inspections() {
           `
         *,
         tribes (
+          camp_id,
           name,
           color,
           symbol,
@@ -91,12 +100,14 @@ export default function Inspections() {
 
       const { data: teamsData, error: teamsError } = await supabase
         .from('competition_teams')
-        .select('id, name')
+        .select('id, camp_id, name, color')
         .eq('camp_id', activeCampId)
 
-      if (tribesError || inspectionsError || teamsError) {
-        logError('Inspections', tribesError || inspectionsError || teamsError)
+      if (campError || !campData || tribesError || inspectionsError || teamsError) {
+        logError('Inspections', campError || tribesError || inspectionsError || teamsError)
         if (shouldIgnore()) return
+        setConfiguration({ campId: null, value: null })
+        showError('Não foi possível carregar os quartos ou a configuração das inspeções.')
         setLoading(false)
         return
       }
@@ -106,9 +117,10 @@ export default function Inspections() {
       setTribes(tribesData || [])
       setCompetitionTeams(teamsData || [])
       setInspections(inspectionsData || [])
+      setConfiguration({ campId: activeCampId, value: campData.inspection_schedule })
       setLoading(false)
     },
-    [activeCampId]
+    [activeCampId, showError]
   )
 
   useEffect(() => {
@@ -128,12 +140,17 @@ export default function Inspections() {
 
   function handleChange(event) {
     const { name, value, type, checked } = event.target
+    if (name === 'competition_team_id') {
+      setForm(current => ({ ...current, competition_team_id: value,
+        tribe_id: tribes.some(room => room.id === current.tribe_id && room.camp_id === activeCampId && room.competition_team_id === value) ? current.tribe_id : '' }))
+      return
+    }
 
     if (name === 'inspection_day') {
       setForm((currentForm) => ({
         ...currentForm,
         inspection_day: value,
-        inspection_period: availablePeriods[value][0],
+        inspection_period: availablePeriods[value]?.[0] || '',
       }))
 
       return
@@ -150,9 +167,10 @@ export default function Inspections() {
     setEditingId(inspection.id)
 
     setForm({
+      competition_team_id: tribes.find(room => room.id === inspection.tribe_id)?.competition_team_id || '',
       tribe_id: inspection.tribe_id || '',
-      inspection_day: inspection.inspection_day || 'Sexta',
-      inspection_period: inspection.inspection_period || 'Noite',
+      inspection_day: inspection.inspection_day || '',
+      inspection_period: inspection.inspection_period || '',
       type: inspection.type || 'POINT',
       points: Math.abs(Number(inspection.points || 0)),
       notes: inspection.notes || '',
@@ -175,38 +193,10 @@ export default function Inspections() {
       return
     }
 
-    if (!form.tribe_id) {
-      showError('Selecione um quarto.')
-      return
-    }
-
-    const selectedRoom = tribes.find((tribe) => tribe.id === form.tribe_id)
-    if (!selectedRoom) {
-      showError('Selecione um quarto deste acampamento.')
-      return
-    }
-
-    if (
-      !selectedRoom.competition_team_id ||
-      !competitionTeams.some(
-        (team) => team.id === selectedRoom.competition_team_id
-      )
-    ) {
-      showError('Vincule o quarto a uma equipe antes de lançar a inspeção.')
-      return
-    }
-
-    if (!availablePeriods[form.inspection_day]) {
-      showError('Selecione o dia da inspeção.')
-      return
-    }
-
-    if (
-      !availablePeriods[form.inspection_day].includes(form.inspection_period)
-    ) {
-      showError('Selecione o período da inspeção.')
-      return
-    }
+    if (!scheduleReady) { showError('A configuração das inspeções ainda não está disponível.'); return }
+    const selectionError = validateInspectionSelection({ campId: activeCampId, teamId: form.competition_team_id, roomId: form.tribe_id,
+      day: form.inspection_day, period: form.inspection_period, schedule, rooms: tribes, teams: competitionTeams, original: originalInspection })
+    if (selectionError) { showError(selectionError); return }
 
     if (!['POINT', 'PENALTY'].includes(form.type)) {
       showError('Selecione um tipo válido de inspeção.')
@@ -311,11 +301,12 @@ export default function Inspections() {
     })
 
     return statusMap
-  }, [tribes, inspections])
+  }, [tribes, inspections, inspectionSchedule])
 
   const activeTribes = useMemo(() => {
     return [...tribes].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
   }, [tribes])
+  const selectableRooms = getInspectionRoomOptions(activeTribes, competitionTeams, activeCampId, form.competition_team_id)
 
   function getRoomLabel(tribe) {
     if (!tribe) return 'Quarto não encontrado'
@@ -342,7 +333,7 @@ export default function Inspections() {
         <div className="flex items-center justify-end gap-3 md:justify-start">
           <div
             className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
-            style={{ backgroundColor: inspection.tribes?.color }}
+            style={{ backgroundColor: getRoomColor(inspection.tribes, competitionTeams) }}
           >
             {inspection.tribes?.symbol}
           </div>
@@ -355,14 +346,14 @@ export default function Inspections() {
       key: 'day',
       label: 'Dia',
       render: (inspection) => (
-        <span className="text-zinc-300">{inspection.inspection_day}</span>
+        <span className="text-zinc-300">{inspection.inspection_day || 'Não informado'}</span>
       ),
     },
     {
       key: 'period',
       label: 'Período',
       render: (inspection) => (
-        <span className="text-zinc-400">{inspection.inspection_period}</span>
+        <span className="text-zinc-400">{inspection.inspection_period || 'Não informado'}</span>
       ),
     },
     {
@@ -441,17 +432,25 @@ export default function Inspections() {
           {editingId ? 'Editar inspeção' : 'Nova inspeção'}
         </h2>
 
-        <fieldset disabled={saving}>
+        {scheduleReady && schedule.length === 0 && <p role="status" className="mt-4 text-sm text-yellow-400">Nenhum turno configurado. Defina os dias e horários na edição do acampamento.</p>}
+        <fieldset disabled={saving || !scheduleReady}>
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <select name="competition_team_id" value={form.competition_team_id} onChange={handleChange} aria-label="Equipe da inspeção" required className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500">
+              <option value="">Selecione a equipe</option>
+              {competitionTeams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+            </select>
             <select
               name="tribe_id"
+              aria-label="Quarto da inspeção"
+              disabled={!form.competition_team_id}
+              required
               value={form.tribe_id}
               onChange={handleChange}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
             >
-              <option value="">Selecione o quarto / equipe</option>
+              <option value="">Selecione o quarto</option>
 
-              {activeTribes.map((tribe) => (
+              {selectableRooms.map((tribe) => (
                 <option
                   key={tribe.id}
                   value={tribe.id}
@@ -464,21 +463,23 @@ export default function Inspections() {
 
             <select
               name="inspection_day"
+              aria-label="Dia da inspeção"
               value={form.inspection_day}
               onChange={handleChange}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
             >
-              <option value="Sexta">Sexta</option>
-              <option value="Sábado">Sábado</option>
-              <option value="Domingo">Domingo</option>
+              <option value="">Selecione o dia</option>
+              {Object.keys(availablePeriods).map(day => <option key={day} value={day}>{INSPECTION_DAYS.find(item => item.value === day)?.label || day}</option>)}
             </select>
 
             <select
               name="inspection_period"
+              aria-label="Turno da inspeção"
               value={form.inspection_period}
               onChange={handleChange}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
             >
+              <option value="">Selecione o turno</option>
               {availablePeriods[form.inspection_day]?.map((period) => (
                 <option key={period} value={period}>
                   {period}
@@ -551,7 +552,7 @@ export default function Inspections() {
 
             <button
               type="submit"
-              disabled={saving || !activeCampId}
+              disabled={saving || !activeCampId || !scheduleReady || (!editingId && schedule.length === 0)}
               className="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving
@@ -576,7 +577,7 @@ export default function Inspections() {
               <div className="flex items-center gap-3">
                 <div
                   className="flex h-12 w-12 items-center justify-center rounded-xl text-lg"
-                  style={{ backgroundColor: tribe.color }}
+                  style={{ backgroundColor: getRoomColor(tribe, competitionTeams) }}
                 >
                   {tribe.symbol}
                 </div>
