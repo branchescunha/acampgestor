@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createMockContext } from './fixtures.mjs'
+import { accountNavigationInteractions } from './account-navigation.mjs'
 
 const require = createRequire(import.meta.url)
 const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
@@ -110,7 +111,14 @@ async function measure(page) {
       }))
     const symbols = [...document.querySelectorAll('.entity-symbol')]
       .filter(visible)
-        .map((el) => ({ ...rect(el), parent: rect(el.parentElement), clipped: !el.classList.contains('entity-symbol-legacy') && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) }))
+      .map((el) => ({
+        ...rect(el),
+        parent: rect(el.parentElement),
+        clipped:
+          !el.classList.contains('entity-symbol-legacy') &&
+          (el.scrollWidth > el.clientWidth + 1 ||
+            el.scrollHeight > el.clientHeight + 1),
+      }))
     const tables = [...document.querySelectorAll('.records-table-view')]
       .filter(visible)
       .map((el) => ({ width: el.clientWidth, contentWidth: el.scrollWidth }))
@@ -177,6 +185,10 @@ async function essentialInteractions(browser, engine) {
     mobile: true,
   })
   const page = await context.newPage()
+  page.on('dialog', async (dialog) => {
+    assert.equal(dialog.type(), 'beforeunload')
+    await dialog.accept()
+  })
   page.on('pageerror', (error) => errors.push(`${engine}: ${error.message}`))
   try {
     await ready(page, '/gestor')
@@ -184,14 +196,30 @@ async function essentialInteractions(browser, engine) {
     await page.locator('input[name="start_date"]').fill('2027-02-20')
     await page.locator('input[name="end_date"]').fill('2027-02-19')
     const writesBeforeInvalidDate = fixture.writes.length
-    const nativeDate = await page.locator('input[name="end_date"]').evaluate(el => el.type === 'date')
-    await page.getByRole('button', { name: 'Salvar acampamento', exact: true }).click()
+    const nativeDate = await page
+      .locator('input[name="end_date"]')
+      .evaluate((el) => el.type === 'date')
+    await page
+      .getByRole('button', { name: 'Salvar acampamento', exact: true })
+      .click()
     if (nativeDate) {
-      assert.equal(await page.locator('input[name="end_date"]').evaluate(el => el.validity.rangeUnderflow), true)
+      assert.equal(
+        await page
+          .locator('input[name="end_date"]')
+          .evaluate((el) => el.validity.rangeUnderflow),
+        true
+      )
     } else {
-      await page.getByRole('alert').filter({ hasText: 'A data de fim não pode ser anterior' }).waitFor()
+      await page
+        .getByRole('alert')
+        .filter({ hasText: 'A data de fim não pode ser anterior' })
+        .waitFor()
     }
-    assert.equal(fixture.writes.length, writesBeforeInvalidDate, 'An invalid date range must never be submitted')
+    assert.equal(
+      fixture.writes.length,
+      writesBeforeInvalidDate,
+      'An invalid date range must never be submitted'
+    )
     await page.locator('input[name="end_date"]').fill('2027-02-23')
     await page
       .getByRole('button', { name: 'Salvar acampamento', exact: true })
@@ -340,6 +368,10 @@ async function essentialInteractions(browser, engine) {
     baseURL,
   })
   const adminPage = await admin.context.newPage()
+  adminPage.on('dialog', async (dialog) => {
+    assert.equal(dialog.type(), 'beforeunload')
+    await dialog.accept()
+  })
   try {
     await ready(adminPage, '/admin/acampamentos')
     await adminPage.locator('input[name="start_date"]').fill('2027-01-01')
@@ -399,6 +431,8 @@ const server = spawn(
       ...process.env,
       VITE_SUPABASE_URL: 'https://visualqa.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'visual-fixture-not-a-real-key',
+      VITE_ACCOUNT_MANAGEMENT_ENABLED:
+        process.env.QA_ACCOUNT_MANAGEMENT_ENABLED || 'false',
     },
   }
 )
@@ -427,7 +461,9 @@ try {
   for (const engine of engines) {
     const browser = await playwright[engine].launch({ headless: true })
     try {
-      for (const mobile of phase === 'interactions' ? [] : [true, false]) {
+      for (const mobile of ['interactions', 'account'].includes(phase)
+        ? []
+        : [true, false]) {
         const groupWidths = widths.filter((width) => width <= 414 === mobile)
         if (!groupWidths.length) continue
         for (const [roleName, paths] of Object.entries(routes)) {
@@ -464,7 +500,7 @@ try {
                       .click()
                   const metrics = await measure(page)
                   validate(metrics, `${engine} ${width} ${theme} ${path}`)
-                  if (path === '/qa-unificado' && width < 768) {
+                  if (path === '/qa-unificado') {
                     const podium = await page
                       .getByLabel('Pódio', { exact: true })
                       .locator('article')
@@ -525,7 +561,16 @@ try {
         }
         console.log(`${engine}: ${groupWidths.join(', ')}px approved`)
       }
-      if (phase !== 'layout') await essentialInteractions(browser, engine)
+      if (!['layout', 'account'].includes(phase))
+        await essentialInteractions(browser, engine)
+      if (phase !== 'layout')
+        await accountNavigationInteractions(
+          browser,
+          engine,
+          baseURL,
+          process.env.QA_ACCOUNT_MANAGEMENT_ENABLED === 'true',
+          errors
+        )
     } finally {
       await browser.close()
     }

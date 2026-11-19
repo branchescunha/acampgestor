@@ -6,6 +6,9 @@ import { useAuthContext } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import RecordActions from '../components/RecordActions'
+import { useRecordAction } from '../hooks/useRecordAction'
+import { accountManagementEnabled } from '../features/auth/account'
 
 const initialForm = {
   name: '',
@@ -31,6 +34,39 @@ export default function Organizations() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const { run, busy } = useRecordAction()
+
+  async function handleDelete(organization) {
+    if (!isAdmin || !accountManagementEnabled || saving) return
+    setError('')
+    const done = await run(
+      {
+        title: `Excluir organização ${organization.name}?`,
+        description:
+          'A exclusão é definitiva e só será permitida se não houver acampamentos ou histórico vinculado. Os vínculos administrativos da organização vazia serão removidos.',
+        confirmLabel: 'Excluir organização',
+      },
+      async () => {
+        const { error: deleteError } = await supabase.rpc(
+          'delete_empty_organization',
+          { target_organization_id: organization.id }
+        )
+        if (deleteError) {
+          setError(
+            deleteError.code === '23503'
+              ? 'Exclusão bloqueada: esta organização possui acampamentos ou histórico vinculado.'
+              : 'Não foi possível excluir a organização. Verifique sua permissão e tente novamente.'
+          )
+          throw deleteError
+        }
+      },
+      'Organização excluída com segurança.'
+    )
+    if (done) {
+      if (editingId === organization.id) resetForm()
+      await loadOrganizations()
+    }
+  }
 
   const loadOrganizations = useCallback(async () => {
     setLoading(true)
@@ -38,7 +74,9 @@ export default function Organizations() {
 
     const { data, error: loadError } = await supabase
       .from('organizations')
-      .select('id, name, type, city, state, notes, created_by, created_at, updated_at')
+      .select(
+        'id, name, type, city, state, notes, created_by, created_at, updated_at'
+      )
       .order('name', { ascending: true })
 
     if (loadError) {
@@ -117,6 +155,7 @@ export default function Organizations() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (saving || busy || (!isAdmin && !isGestor)) return
 
     setError('')
     setSuccess('')
@@ -176,13 +215,13 @@ export default function Organizations() {
     setSuccess(
       wasEditing
         ? 'Organização atualizada com sucesso.'
-        : 'Organização criada com sucesso.',
+        : 'Organização criada com sucesso.'
     )
 
     if (memberError) {
       logError('Organizations', memberError)
       setError(
-        'A organização foi salva, mas não foi possível vincular seu usuário como responsável.',
+        'A organização foi salva, mas não foi possível vincular seu usuário como responsável.'
       )
       setSuccess('')
     }
@@ -212,8 +251,9 @@ export default function Organizations() {
       label: 'Local',
       render: (organization) => (
         <span className="text-zinc-400">
-          {[organization.city, organization.state].filter(Boolean).join(' - ') ||
-            '-'}
+          {[organization.city, organization.state]
+            .filter(Boolean)
+            .join(' - ') || '-'}
         </span>
       ),
     },
@@ -228,15 +268,15 @@ export default function Organizations() {
       key: 'actions',
       label: 'Ações',
       render: (organization) => (
-        <div className="flex flex-col gap-2 sm:flex-row md:justify-start">
-          <button
-            type="button"
-            onClick={() => handleEdit(organization)}
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
-          >
-            Editar
-          </button>
-        </div>
+        <RecordActions
+          onEdit={() => handleEdit(organization)}
+          onDelete={
+            isAdmin && accountManagementEnabled
+              ? () => handleDelete(organization)
+              : undefined
+          }
+          disabled={saving || busy}
+        />
       ),
     },
   ]

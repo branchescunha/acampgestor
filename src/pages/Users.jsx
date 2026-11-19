@@ -7,12 +7,23 @@ import { useRecordAction } from '../hooks/useRecordAction'
 import { supabase } from '../lib/supabase'
 import { connectionMessage } from '../utils/network'
 import { useReadRetry } from '../hooks/useReadRetry'
+import { useAuthContext } from '../hooks/useAuth'
+import {
+  accountManagementEnabled,
+  validateAccountEmail,
+  validateAccountPassword,
+} from '../features/auth/account'
+import { invokeAccountAction } from '../features/auth/accountClient'
 
 export default function Users() {
   const { isAdmin } = useUserProfile()
+  const { session } = useAuthContext()
   const [profiles, setProfiles] = useState([])
   const [editing, setEditing] = useState(null)
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { run, busy } = useRecordAction()
@@ -20,14 +31,38 @@ export default function Users() {
   const loadProfiles = useCallback(async () => {
     if (!isAdmin) return
     setLoading(true)
+    if (accountManagementEnabled) {
+      try {
+        const { users } = await invokeAccountAction(supabase, {
+          action: 'list-users',
+        })
+        setProfiles(users)
+        setError('')
+      } catch (loadError) {
+        setError(loadError.message)
+      }
+      setLoading(false)
+      return
+    }
     const { data, error: loadError } = await supabase
       .from('profiles')
       .select('id, name, email, role, status')
       .order('name')
+    const { data: authData } = await supabase.auth.getUser()
+    const ownEmail =
+      authData?.user?.id === session?.user?.id
+        ? authData.user.email
+        : session?.user?.email
     setError(loadError ? connectionMessage(loadError) : '')
-    if (!loadError) setProfiles(data || [])
+    if (!loadError)
+      setProfiles(
+        (data || []).map((profile) => ({
+          ...profile,
+          email: profile.id === session?.user?.id ? ownEmail : profile.email,
+        }))
+      )
     setLoading(false)
-  }, [isAdmin])
+  }, [isAdmin, session])
 
   useReadRetry(loadProfiles)
 
@@ -41,7 +76,60 @@ export default function Users() {
   function edit(profile) {
     setEditing(profile)
     setName(profile.name || '')
+    setEmail(profile.email || '')
+    setPassword('')
+    setConfirmation('')
+    setError('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function changeAccess(action) {
+    if (!isAdmin || !accountManagementEnabled || editing?.role !== 'gestor')
+      return
+    const invalid =
+      action === 'update-email'
+        ? validateAccountEmail(email)
+        : validateAccountPassword(password, confirmation)
+    if (invalid) {
+      setError(invalid)
+      return
+    }
+    setError('')
+    const done = await run(
+      {
+        title:
+          action === 'update-email'
+            ? `Corrigir e-mail de ${editing.name}?`
+            : `Substituir senha de ${editing.name}?`,
+        description:
+          action === 'update-email'
+            ? 'Confirme a identidade do gestor antes de continuar. O endereço será alterado no Auth sem envio de confirmação. O UID, o papel, o status e o histórico serão preservados.'
+            : 'A senha anterior será substituída, sem ser exibida. O status de acesso será preservado. Entregue a nova senha ao gestor por um canal seguro.',
+        confirmLabel:
+          action === 'update-email' ? 'Confirmar correção' : 'Substituir senha',
+      },
+      async () => {
+        try {
+          await invokeAccountAction(supabase, {
+            action,
+            targetId: editing.id,
+            confirmed: true,
+            ...(action === 'update-email' ? { email } : { password }),
+          })
+        } catch (operationError) {
+          setError(operationError.message)
+          throw operationError
+        }
+      },
+      action === 'update-email'
+        ? 'E-mail de acesso corrigido.'
+        : 'Senha anterior substituída. O status de acesso foi preservado.'
+    )
+    if (done) {
+      setPassword('')
+      setConfirmation('')
+      await loadProfiles()
+    }
   }
 
   async function save(event) {
@@ -112,23 +200,39 @@ export default function Users() {
       key: 'role',
       label: 'Papel',
       render: (profile) =>
-        profile.role === 'admin' ? 'Administrador' : 'Gestor',
+        profile.role === 'admin'
+          ? 'Administrador'
+          : profile.role === 'gestor'
+            ? 'Gestor'
+            : 'Sem perfil',
     },
     {
       key: 'status',
       label: 'Acesso',
       render: (profile) =>
-        profile.status === 'active' ? 'Ativo' : 'Desativado',
+        profile.authMissing
+          ? 'Conta Auth ausente'
+          : !profile.role
+            ? 'Sem acesso'
+            : profile.status === 'active'
+              ? 'Ativo'
+              : 'Desativado',
     },
     {
       key: 'actions',
       label: 'Ações',
       render: (profile) => (
         <RecordActions
-          onEdit={() => edit(profile)}
+          onEdit={
+            ['admin', 'gestor'].includes(profile.role) && !profile.authMissing
+              ? () => edit(profile)
+              : undefined
+          }
           disabled={busy}
           onToggle={
-            profile.role === 'gestor' ? () => toggle(profile) : undefined
+            profile.role === 'gestor' && !profile.authMissing
+              ? () => toggle(profile)
+              : undefined
           }
           toggleLabel={
             profile.status === 'active' ? 'Desativar acesso' : 'Ativar acesso'
@@ -145,7 +249,7 @@ export default function Users() {
       <PageHeader
         eyebrow="Usuários"
         title="Contas existentes"
-        description="Gerencie os nomes e o acesso das contas cadastradas."
+        description="Gerencie os dados e o acesso das contas cadastradas."
       />
       <p className="mb-6 text-sm text-zinc-400">
         A desativação preserva a conta e seu histórico, mas bloqueia o acesso
@@ -187,7 +291,11 @@ export default function Users() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => setEditing(null)}
+              onClick={() => {
+                setEditing(null)
+                setPassword('')
+                setConfirmation('')
+              }}
               className="record-action"
             >
               Cancelar
@@ -200,6 +308,63 @@ export default function Users() {
               {busy ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
+          {accountManagementEnabled && editing.role === 'gestor' && (
+            <fieldset
+              disabled={busy}
+              className="space-y-4 border-t border-zinc-800 pt-5"
+            >
+              <legend className="pt-4 font-semibold">Acesso do gestor</legend>
+              <label className="block text-sm">
+                E-mail de acesso
+                <input
+                  name="access_email"
+                  type="email"
+                  autoComplete="off"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 p-3"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => changeAccess('update-email')}
+                className="record-action"
+              >
+                Corrigir e-mail
+              </button>
+              <label className="block text-sm">
+                Nova senha do gestor
+                <input
+                  name="managed_password"
+                  type="password"
+                  autoComplete="new-password"
+                  maxLength={128}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 p-3"
+                />
+              </label>
+              <label className="block text-sm">
+                Confirmar nova senha
+                <input
+                  name="managed_confirmation"
+                  type="password"
+                  autoComplete="new-password"
+                  maxLength={128}
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 p-3"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => changeAccess('reset-password')}
+                className="record-action"
+              >
+                Redefinir senha
+              </button>
+            </fieldset>
+          )}
         </form>
       )}
       {loading ? (

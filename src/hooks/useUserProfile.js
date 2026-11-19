@@ -6,22 +6,24 @@ import { logError } from '../utils/logger'
 
 export function useUserProfile() {
   const { session, loadingAuth } = useAuthContext()
+  const userId = session?.user?.id
   const [profile, setProfile] = useState(null)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [error, setError] = useState('')
   const loadFailed = useRef(false)
+  const previousUser = useRef(null)
 
   useEffect(() => {
     let isMounted = true
 
-    async function loadProfile() {
-      setLoadingProfile(true)
+    async function loadProfile(background = false) {
+      if (!background) setLoadingProfile(true)
       setError('')
 
       const { data, error: profileError } = await supabase
         .from('profiles')
         .select('id, name, role, status')
-        .eq('id', session.user.id)
+        .eq('id', userId)
         .maybeSingle()
 
       if (!isMounted) return
@@ -40,17 +42,25 @@ export function useUserProfile() {
       setLoadingProfile(false)
     }
 
-    if (session?.user?.id) {
-      loadProfile()
+    if (userId) {
+      void loadProfile(previousUser.current === userId)
     }
-    const retry = () => { if (session?.user?.id && loadFailed.current) void loadProfile() }
+    previousUser.current = userId
+    const retry = () => {
+      if (userId && loadFailed.current) void loadProfile()
+    }
     window.addEventListener('acampgestor:retry-reads', retry)
+    const reload = () => {
+      if (userId) void loadProfile(true)
+    }
+    window.addEventListener('acampgestor:profile-updated', reload)
 
     return () => {
       isMounted = false
       window.removeEventListener('acampgestor:retry-reads', retry)
+      window.removeEventListener('acampgestor:profile-updated', reload)
     }
-  }, [session])
+  }, [userId, session])
 
   const role = profile?.role || ''
   const status = profile?.status || ''

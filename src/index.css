@@ -189,7 +189,7 @@ div:has(> .entity-symbol) { flex-shrink: 0; }
 .ranking-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 8px; margin-top: 24px; padding-top: 12px; }
 .podium-place { min-width: 0; height: 180px; padding: 12px 6px; text-align: center; overflow-wrap: anywhere; }
 .podium-place-1 { height: 204px; }
-@media (min-width: 768px) { .ranking-podium { gap: 16px; } .podium-place { height: 214px; padding: 24px 16px; } .podium-place-1 { height: 244px; } }
+@media (min-width: 768px) { .ranking-podium { gap: 16px; } .podium-place { height: 184px; padding: 24px 16px; } .podium-place-1 { height: 244px; } .podium-place-2 { height: 214px; } }
 @media (max-width: 767px) {
   .podium-place-1 { height: 240px; }
   .podium-place-2 { height: 210px; }

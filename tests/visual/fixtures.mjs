@@ -31,17 +31,15 @@ export function createVisualFixture(role) {
   teams[0].symbol = 'SIMBOLO HISTORICO MUITO LONGO'
   teams[1].symbol = '👨‍👩‍👧‍👦'
   teams[2].symbol = '🏕️🌿🏆'
-  const rooms = scenario.tribes
-    .slice(2)
-    .map((room, index) => ({
-      ...room,
-      id: id(31 + index),
-      camp_id: camp.id,
-      competition_team_id: teams[index].id,
-      room_type: index ? 'Feminino' : 'Masculino',
-      is_active: true,
-      symbol: index ? '🌿' : 'HISTORICO LONGO',
-    }))
+  const rooms = scenario.tribes.slice(2).map((room, index) => ({
+    ...room,
+    id: id(31 + index),
+    camp_id: camp.id,
+    competition_team_id: teams[index].id,
+    room_type: index ? 'Feminino' : 'Masculino',
+    is_active: true,
+    symbol: index ? '🌿' : 'HISTORICO LONGO',
+  }))
   const participants = [
     {
       ...scenario.participants[2],
@@ -126,6 +124,7 @@ export function createVisualFixture(role) {
     user,
     camp,
     writes: [],
+    authWrites: [],
     failReads: false,
     delay: 0,
     data: {
@@ -198,9 +197,75 @@ export async function createMockContext(
     if (url.hostname !== 'visualqa.supabase.co') return route.abort()
     if (fixture.delay)
       await new Promise((resolve) => setTimeout(resolve, fixture.delay))
-    if (url.pathname === '/auth/v1/user')
+    if (url.pathname === '/auth/v1/user') {
+      if (request.method() === 'PUT') {
+        const payload = request.postDataJSON()
+        fixture.authWrites.push({
+          email: payload.email,
+          passwordChanged: Boolean(payload.password),
+        })
+        if (payload.email) fixture.user.new_email = payload.email
+      }
       return route.fulfill({ json: fixture.user })
+    }
+    if (url.pathname === '/functions/v1/manage-user-account') {
+      const payload = request.postDataJSON()
+      if (payload.action === 'capabilities')
+        return route.fulfill({ json: { selfEmailEnabled: true } })
+      if (role !== 'admin')
+        return route.fulfill({
+          status: 403,
+          json: { message: 'ADMIN required' },
+        })
+      if (payload.action === 'list-users')
+        return route.fulfill({
+          json: {
+            users: [
+              ...fixture.data.profiles.map((profile) => ({
+                ...profile,
+                email:
+                  profile.id === fixture.user.id
+                    ? fixture.user.email
+                    : 'gestor@example.invalid',
+              })),
+              {
+                id: id(3),
+                name: null,
+                email: 'pending@example.invalid',
+                role: null,
+                status: null,
+                hasProfile: false,
+              },
+            ],
+          },
+        })
+      fixture.authWrites.push({
+        action: payload.action,
+        targetId: payload.targetId,
+        email: payload.email,
+        passwordChanged: Boolean(payload.password),
+      })
+      return route.fulfill({ json: { success: true } })
+    }
     const table = url.pathname.split('/').pop()
+    if (table === 'delete_empty_organization') {
+      const payload = request.postDataJSON()
+      if (role !== 'admin')
+        return route.fulfill({
+          status: 403,
+          json: { code: '42501', message: 'ADMIN required' },
+        })
+      if (fixture.blockOrganizationDelete)
+        return route.fulfill({
+          status: 409,
+          json: { code: '23503', message: 'Linked history' },
+        })
+      fixture.writes.push({ table, method: 'POST', payload })
+      fixture.data.organizations = fixture.data.organizations.filter(
+        (item) => item.id !== payload.target_organization_id
+      )
+      return route.fulfill({ status: 204 })
+    }
     if (fixture.failReads && ['GET', 'HEAD'].includes(request.method())) {
       return route.fulfill({
         status: 503,

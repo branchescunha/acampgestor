@@ -12,6 +12,7 @@ import CampAdminRoute from './components/CampAdminRoute'
 import AdminOnlyRoute from './components/AdminOnlyRoute'
 import RequireActiveCamp from './components/RequireActiveCamp'
 import PageMetadata from './components/PageMetadata'
+import RouteNavigation from './components/RouteNavigation'
 
 const PublicCampRanking = lazy(() => import('./pages/PublicCampRanking'))
 const LandingPage = lazy(() => import('./pages/LandingPage'))
@@ -63,6 +64,7 @@ function LegacyCampAdminRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
+      <RouteNavigation />
       <PageMetadata />
       <Suspense fallback={<RouteLoading />}>
         <Routes>

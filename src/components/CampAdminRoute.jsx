@@ -1,5 +1,11 @@
 ﻿import { useEffect, useState } from 'react'
-import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router-dom'
+import {
+  Link,
+  Navigate,
+  Outlet,
+  useLocation,
+  useParams,
+} from 'react-router-dom'
 import AdminLayout from './AdminLayout'
 import RoleAccessNotice from './RoleAccessNotice'
 import { useAuthContext } from '../hooks/useAuth'
@@ -21,6 +27,8 @@ export default function CampAdminRoute() {
     loading: loadingProfile,
     error: profileError,
   } = useUserProfile()
+  const userId = session?.user?.id
+  const profileId = profile?.id
   const { setActiveCamp } = useActiveCamp()
   const [loadingCamp, setLoadingCamp] = useState(true)
   const [camp, setCamp] = useState(null)
@@ -57,14 +65,14 @@ export default function CampAdminRoute() {
         return
       }
 
-      let canAccessCamp = isGestor && data.created_by === session.user.id
+      let canAccessCamp = isGestor && data.created_by === userId
 
       if (!canAccessCamp && isGestor && data.organization_id) {
         const { data: membershipData, error: membershipError } = await supabase
           .from('organization_members')
           .select('id')
           .eq('organization_id', data.organization_id)
-          .eq('profile_id', session.user.id)
+          .eq('profile_id', userId)
           .eq('status', 'active')
           .maybeSingle()
 
@@ -87,21 +95,14 @@ export default function CampAdminRoute() {
       setLoadingCamp(false)
     }
 
-    if (session && profile && isActive) {
+    if (userId && profileId && isActive) {
       loadCamp()
     }
 
     return () => {
       shouldIgnore = true
     }
-  }, [
-    campSlug,
-    isActive,
-    isGestor,
-    profile,
-    session,
-    setActiveCamp,
-  ])
+  }, [campSlug, isActive, isGestor, profileId, userId, setActiveCamp])
 
   if (loadingAuth || loadingProfile) {
     return (
@@ -180,8 +181,7 @@ export default function CampAdminRoute() {
           </h1>
 
           <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-            Acampamento não encontrado ou você não tem permissão para
-            acessá-lo.
+            Acampamento não encontrado ou você não tem permissão para acessá-lo.
           </p>
 
           <Link
