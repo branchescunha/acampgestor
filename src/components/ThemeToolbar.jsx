@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Moon, Sun } from 'lucide-react'
 import { applyTheme, readTheme, saveTheme, THEME_STORAGE_KEY } from '../utils/theme'
+import ConnectionNotice from './ConnectionNotice'
 
 export default function ThemeToolbar() {
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'dark')
@@ -27,15 +28,18 @@ export default function ThemeToolbar() {
   const Icon = theme === 'dark' ? Sun : Moon
 
   return (
-    <header className="app-toolbar">
+    <><header className="app-toolbar">
       <a href="#main-content" className="skip-link">Ir para o conteúdo</a>
       <a href="/" className="app-wordmark" aria-label="AcampGestor — início">
         <img src="/favicon.svg?v=2" width="25" height="25" alt="" />
         AcampGestor
       </a>
+      <div className="flex shrink-0 items-center gap-2">
       <button type="button" onClick={toggleTheme} aria-label={label} title={label} className="theme-toggle">
         <Icon size={19} aria-hidden="true" />
       </button>
-    </header>
+      <div id="panel-menu-slot" className="lg:hidden" />
+      </div>
+    </header><ConnectionNotice /></>
   )
 }

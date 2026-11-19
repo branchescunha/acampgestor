@@ -11,6 +11,9 @@ import { logError } from '../utils/logger'
 import InspectionScheduleFields from '../components/InspectionScheduleFields'
 import { getInspectionSchedule, includeUsedInspectionSlots, isValidInspectionSchedule } from '../features/inspections/inspectionSchedule'
 import { useUsedInspectionSlots } from '../hooks/useUsedInspectionSlots'
+import RecordActions from '../components/RecordActions'
+import { useRecordAction } from '../hooks/useRecordAction'
+import { useReadRetry } from '../hooks/useReadRetry'
 
 const initialForm = {
   name: '',
@@ -40,6 +43,7 @@ const statusStyles = {
 export default function Camps() {
   const { session } = useAuthContext()
   const { isAdmin } = useUserProfile()
+  const { run: runAction, busy: actionBusy } = useRecordAction()
   const [camps, setCamps] = useState([])
   const [organizations, setOrganizations] = useState([])
   const [form, setForm] = useState(initialForm)
@@ -97,6 +101,8 @@ export default function Camps() {
     setCamps(data || [])
     setLoading(false)
   }, [])
+
+  useReadRetry(loadCamps)
 
   const loadOrganizations = useCallback(async () => {
     const { data, error: loadError } = await supabase
@@ -216,8 +222,22 @@ export default function Camps() {
     }
   }
 
+  async function handleArchive(camp) {
+    if (saving || camp.status === 'archived') return
+    const done = await runAction({ title: `Arquivar acampamento ${camp.name}?`, description: 'O acampamento será marcado como arquivado, sem apagar quartos, participantes ou histórico. O ranking público será desabilitado. Você poderá editar e reativar o acampamento.', confirmLabel: 'Arquivar' }, async () => {
+      const { error: archiveError } = await supabase.from('camps').update({ status: 'archived', public_ranking_enabled: false, updated_at: new Date().toISOString() }).eq('id', camp.id).select('id').single()
+      if (archiveError) throw archiveError
+    }, 'Acampamento arquivado. Os dados foram preservados.')
+    if (done) {
+      if (activeCampId === camp.id) clearActiveCamp()
+      if (editingId === camp.id) resetForm()
+      await loadCamps()
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
+    if (saving || actionBusy) return
 
     setError('')
     setSuccess('')
@@ -393,9 +413,11 @@ export default function Camps() {
       key: 'actions',
       label: 'Ações',
       render: (camp) => (
-        <div className="flex flex-col gap-2 sm:flex-row md:justify-start">
+        <div className="grid gap-2">
+          <RecordActions onEdit={() => handleEdit(camp)} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" disabled={saving || actionBusy} />
           <button
             type="button"
+            disabled={saving || actionBusy || camp.status === 'archived'}
             onClick={() =>
               activeCampId === camp.id
                 ? handleClearActiveCamp()
@@ -406,13 +428,6 @@ export default function Camps() {
             {activeCampId === camp.id ? 'Remover selecao' : 'Selecionar'}
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleEdit(camp)}
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
-          >
-            Editar
-          </button>
         </div>
       ),
     },

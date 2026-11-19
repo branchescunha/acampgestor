@@ -17,6 +17,24 @@ const request = {
   },
 }
 
+for (const kind of ['score', 'gymkhana', 'inspection']) {
+  test(`cancellation of ${kind} keeps the same operation key after an uncertain response`, async () => {
+    const calls = []
+    const operation = createResultOperation({ rpc: async (name, args) => {
+      calls.push({ name, args })
+      if (calls.length === 1) throw new Error('connection interrupted after commit')
+      return { data: { id: 'existing' } }
+    } })
+    const cancellation = { campId: 'camp', kind, action: 'delete', recordId: 'existing' }
+    await assert.rejects(operation.execute(cancellation))
+    await operation.execute(cancellation)
+    assert.equal(calls[0].args.p_operation_id, calls[1].args.p_operation_id)
+    assert.equal(calls[0].args.p_camp_id, 'camp')
+    assert.equal(calls[1].args.p_action, 'delete')
+    assert.equal(calls[1].name, kind === 'score' ? 'save_camp_score' : 'save_camp_result')
+  })
+}
+
 test('uses the atomic RPC contract and returns its result', async () => {
   let call
   const operation = createResultOperation({

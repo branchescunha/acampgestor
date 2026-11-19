@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { Menu } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import RoleAccessNotice from './RoleAccessNotice'
 import Sidebar from './Sidebar'
 import {
@@ -23,14 +24,41 @@ const adminOperationPaths = [
 
 export default function AdminLayout({ children }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuButton = useRef(null)
+  const closeMenu = useCallback(() => {
+    setIsMenuOpen(false)
+    menuButton.current?.focus()
+  }, [])
   useEffect(() => {
     if (!isMenuOpen) return
+    const sidebar = document.getElementById('camp-navigation')
+    const content = document.getElementById('panel-content')
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    content?.setAttribute('inert', '')
+    sidebar?.querySelector('button, a')?.focus()
     function closeOnEscape(event) {
-      if (event.key === 'Escape') setIsMenuOpen(false)
+      if (event.key === 'Escape') closeMenu()
+      if (event.key === 'Tab') {
+        const targets = [...sidebar.querySelectorAll('a[href], button:not(:disabled), select')].filter(el => el.getClientRects().length)
+        const first = targets[0]
+        const last = targets.at(-1)
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); menuButton.current?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); menuButton.current?.focus() }
+        else if (document.activeElement === menuButton.current) { event.preventDefault(); (event.shiftKey ? last : first)?.focus() }
+      }
     }
     window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [isMenuOpen])
+    const desktop = window.matchMedia('(min-width: 1024px)')
+    const onResize = () => { if (desktop.matches) closeMenu() }
+    desktop.addEventListener('change', onResize)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      desktop.removeEventListener('change', onResize)
+      content?.removeAttribute('inert')
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isMenuOpen, closeMenu])
   const location = useLocation()
   const { campSlug } = useParams()
   const {
@@ -112,9 +140,9 @@ export default function AdminLayout({ children }) {
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="flex">
-        <Sidebar isMenuOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+        <Sidebar isMenuOpen={isMenuOpen} onClose={closeMenu} />
 
-        <section className="min-h-screen min-w-0 flex-1 p-5 lg:p-8">
+        <section id="panel-content" className="min-h-screen min-w-0 flex-1 p-5 lg:p-8">
           <header className="mb-8 flex items-center justify-between lg:hidden">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-yellow-500">
@@ -126,17 +154,18 @@ export default function AdminLayout({ children }) {
               </h1>
             </div>
 
-            <button
+          </header>
+          {document.getElementById('panel-menu-slot') && createPortal(<button
               type="button"
-              onClick={() => setIsMenuOpen(true)}
-              aria-label="Abrir menu"
+              ref={menuButton}
+              onClick={() => isMenuOpen ? closeMenu() : setIsMenuOpen(true)}
+              aria-label={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
               aria-expanded={isMenuOpen}
               aria-controls="camp-navigation"
-              className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-zinc-300 shadow-lg"
+              className="theme-toggle"
             >
-              <Menu size={24} />
-            </button>
-          </header>
+              {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>, document.getElementById('panel-menu-slot'))}
 
           {shouldShowActiveCampBar && (
           <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-4 text-sm text-zinc-300">
@@ -175,7 +204,8 @@ export default function AdminLayout({ children }) {
       {isMenuOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
-          onClick={() => setIsMenuOpen(false)}
+          onClick={closeMenu}
+          aria-hidden="true"
         />
       )}
     </main>

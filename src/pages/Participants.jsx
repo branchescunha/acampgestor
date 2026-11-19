@@ -12,7 +12,9 @@ import {
   validateParticipantForm,
 } from '../features/participants/participantForm'
 import { useActiveCamp } from '../hooks/useActiveCamp'
-import { useConfirm } from '../hooks/useConfirm'
+import { useRecordAction } from '../hooks/useRecordAction'
+import RecordActions from '../components/RecordActions'
+import EntitySymbol from '../components/EntitySymbol'
 import { useToast } from '../hooks/useToast'
 import { supabase } from '../lib/supabase'
 import { calculateAgeFromDateOnly } from '../utils/date'
@@ -28,7 +30,7 @@ export default function Participants() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { activeCampId } = useActiveCamp()
-  const requestConfirmation = useConfirm()
+  const { run: runAction, busy: actionBusy } = useRecordAction()
   const { showError } = useToast()
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function Participants() {
       const { data: tribesData, error: tribesError } = await supabase
         .from('tribes')
         .select(
-          'id, camp_id, competition_team_id, name, color, symbol, room_type, room_name'
+          'id, camp_id, competition_team_id, name, color, symbol, room_type, room_name, is_active'
         )
         .eq('camp_id', activeCampId)
         .order('name')
@@ -113,8 +115,11 @@ export default function Participants() {
 
     if (activeCampId) {
       loadData()
+      const retry = () => { void loadData() }
+      window.addEventListener('acampgestor:retry-reads', retry)
       return () => {
         shouldIgnore = true
+        window.removeEventListener('acampgestor:retry-reads', retry)
       }
     }
 
@@ -259,41 +264,35 @@ export default function Participants() {
     setForm(initialParticipantForm)
   }
 
-  async function handleDelete() {
-    const confirmDelete = await requestConfirmation({
-      title: 'Excluir participante',
-      description:
-        'Tem certeza que deseja excluir este participante? Essa ação não pode ser desfeita.',
-      confirmLabel: 'Excluir',
-    })
+  async function handleDelete(participant = participants.find(item => item.id === editingId)) {
+    if (!participant || saving) return
+    const done = await runAction({ title: `Excluir participante ${participant.full_name}?`, description: 'Esta ação é definitiva. Participantes com pontuações históricas não podem ser excluídos; nesse caso, use Inativar.', confirmLabel: 'Confirmar exclusão' }, async () => {
+      const { error } = await supabase.from('participants').delete().eq('id', participant.id).eq('camp_id', activeCampId).select('id').single()
+      if (error) throw error
+    }, 'Participante excluído.')
+    if (done) { if (editingId === participant.id) handleCancelEdit(); await reloadParticipants() }
+  }
 
-    if (!confirmDelete) return
-
-    const { error } = await supabase
-      .from('participants')
-      .delete()
-      .eq('id', editingId)
-      .eq('camp_id', activeCampId)
-
-    if (error) {
-      logError('Participants', error)
-      showError(error.code === '23503' ? 'Este participante possui histórico. Inative-o em vez de excluir.' : 'Erro ao excluir participante.')
-      return
-    }
-
-    setForm(initialParticipantForm)
-    setEditingId(null)
-    await reloadParticipants()
+  async function handleStatusToggle(participant) {
+    if (saving) return
+    const next = !participant.is_active
+    const done = await runAction({ title: `${next ? 'Ativar' : 'Inativar'} ${participant.full_name}?`, description: 'Os vínculos e o histórico de pontuações serão preservados.', confirmLabel: next ? 'Ativar' : 'Inativar', destructive: !next }, async () => {
+      const { error } = await supabase.from('participants').update({ is_active: next }).eq('id', participant.id).eq('camp_id', activeCampId).select('id').single()
+      if (error) throw error
+    }, 'Status do participante atualizado.')
+    if (done) { if (editingId === participant.id) setForm(current => ({ ...current, is_active: next })); await reloadParticipants() }
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (saving || actionBusy) return
 
     const validationError = validateParticipantForm(
       form,
       activeCampId,
       competitionTeams,
       tribes,
+      participants.find(item => item.id === editingId),
     )
 
     if (validationError) {
@@ -364,8 +363,8 @@ export default function Participants() {
   }, [activeCompetitionTeams, competitionTeams, form.competition_team_id, activeCampId])
 
   const formRooms = useMemo(
-    () => filterParticipantRooms(tribes, form.competition_team_id, activeCampId),
-    [tribes, form.competition_team_id, activeCampId],
+    () => filterParticipantRooms(tribes, form.competition_team_id, activeCampId, participants.find(item => item.id === editingId)?.tribe_id),
+    [tribes, form.competition_team_id, activeCampId, participants, editingId],
   )
 
   function renderGenderBadge(gender) {
@@ -421,7 +420,7 @@ export default function Participants() {
               className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
               style={{ backgroundColor: participant.tribes.color }}
             >
-              {participant.tribes.symbol}
+              <EntitySymbol value={participant.tribes.symbol} />
             </div>
 
             <span>{participant.tribes.name}</span>
@@ -440,7 +439,7 @@ export default function Participants() {
               className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
               style={{ backgroundColor: participant.competition_teams.color }}
             >
-              {participant.competition_teams.symbol}
+              <EntitySymbol value={participant.competition_teams.symbol} />
             </div>
 
             <span>
@@ -482,13 +481,7 @@ export default function Participants() {
       key: 'actions',
       label: 'Ações',
       render: (participant) => (
-        <button
-          type="button"
-          onClick={() => handleEdit(participant)}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
-        >
-          Editar
-        </button>
+        <RecordActions onEdit={() => handleEdit(participant)} onDelete={() => handleDelete(participant)} onToggle={() => handleStatusToggle(participant)} toggleLabel={participant.is_active ? 'Inativar' : 'Ativar'} disabled={saving || actionBusy} />
       ),
     },
   ]
@@ -725,7 +718,7 @@ export default function Participants() {
               <>
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={() => handleDelete()}
                   className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10"
                 >
                   Excluir

@@ -5,6 +5,8 @@ import { loadCampScoreTotals, readAllPages, totalsAsScoreEntries } from '../feat
 import { supabase } from '../lib/supabase'
 import { isValidSlug } from '../utils/slug'
 import { logError } from '../utils/logger'
+import EntitySymbol from '../components/EntitySymbol'
+import { connectionMessage } from '../utils/network'
 
 export default function PublicCampRanking() {
   const { campSlug = '' } = useParams()
@@ -12,6 +14,8 @@ export default function PublicCampRanking() {
   const [ranking, setRanking] = useState([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let shouldIgnore = false
@@ -19,6 +23,7 @@ export default function PublicCampRanking() {
     async function loadRanking() {
       setLoading(true)
       setNotFound(false)
+      setError('')
 
       if (!isValidSlug(campSlug)) {
         if (shouldIgnore) return
@@ -40,7 +45,7 @@ export default function PublicCampRanking() {
 
       if (campError) {
         logError('PublicCampRanking', campError)
-        setNotFound(true)
+        setError(connectionMessage(campError))
         setLoading(false)
         return
       }
@@ -69,7 +74,7 @@ export default function PublicCampRanking() {
 
       if (teamsError || eventsError) {
         logError('PublicCampRanking', teamsError || eventsError)
-        setNotFound(true)
+        setError(connectionMessage(teamsError || eventsError))
         setLoading(false)
         return
       }
@@ -94,11 +99,14 @@ export default function PublicCampRanking() {
     }
 
     loadRanking()
+    const retry = () => { void loadRanking() }
+    window.addEventListener('acampgestor:retry-reads', retry)
 
     return () => {
       shouldIgnore = true
+      window.removeEventListener('acampgestor:retry-reads', retry)
     }
-  }, [campSlug])
+  }, [campSlug, attempt])
 
   function getPointsColor(total, index) {
     if (total < 0) return 'text-red-400'
@@ -139,6 +147,8 @@ export default function PublicCampRanking() {
           <div className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-400">
             Carregando ranking...
           </div>
+        ) : error ? (
+          <div className="mt-8 border border-red-500/40 p-5" role="alert"><p>{error}</p><button type="button" className="record-action mt-4" onClick={() => setAttempt(value => value + 1)}>Tentar novamente</button></div>
         ) : notFound ? (
           <div className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center">
             <h2 className="text-2xl font-bold">
@@ -160,53 +170,40 @@ export default function PublicCampRanking() {
           </div>
         ) : (
           <>
-            <div className="mt-10 grid gap-4 md:grid-cols-3">
+            <div className="ranking-podium" aria-label="Pódio">
               {topThree.map((tribe, index) => (
                 <article
                   key={tribe.id}
-                  className={`rounded-3xl border p-5 ${
+                  style={{ gridColumn: index === 0 ? 2 : index === 1 ? 1 : 3, gridRow: 1 }}
+                  className={`podium-place podium-place-${index + 1} rounded-3xl border ${
                     index === 0
                       ? 'border-yellow-500 bg-yellow-500/10'
                       : 'border-zinc-800 bg-zinc-900'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="text-4xl font-black text-yellow-500 md:text-5xl">
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-xl font-bold text-yellow-500 md:text-3xl">
                       #{index + 1}
                     </span>
 
                     <div
-                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-2xl md:h-16 md:w-16 md:text-3xl"
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl"
                       style={{ backgroundColor: tribe.color }}
                     >
-                      {tribe.symbol}
+                      <EntitySymbol value={tribe.symbol} />
                     </div>
                   </div>
 
-                  <h2 className="mt-6 text-2xl font-bold md:text-4xl">
+                  <h2 className="mt-3 line-clamp-3 text-sm font-bold md:line-clamp-2 md:text-xl" title={tribe.name}>
                     {tribe.name}
                   </h2>
 
-                  <div className="mt-6">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 md:text-sm">
-                      Saldo final
-                    </p>
-
-                    <p
-                      className={`mt-2 text-5xl font-black md:text-6xl ${getPointsColor(tribe.total, index)}`}
-                    >
-                      {tribe.total}
-                    </p>
-
-                    <p className="mt-3 text-sm text-zinc-400">
-                      +{tribe.positivePoints} / -{tribe.penaltyPoints}
-                    </p>
-                  </div>
                 </article>
               ))}
             </div>
 
-            <div className="mt-10 hidden overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900 md:block">
+            <h2 className="mt-8 text-xl font-bold">Classificação completa</h2>
+            <div className="mt-4 hidden overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-900 md:block">
               <table className="w-full border-collapse">
                 <thead className="bg-zinc-950">
                   <tr className="text-left text-sm">
@@ -235,7 +232,7 @@ export default function PublicCampRanking() {
                             className="flex h-10 w-10 items-center justify-center rounded-xl"
                             style={{ backgroundColor: tribe.color }}
                           >
-                            {tribe.symbol}
+                            <EntitySymbol value={tribe.symbol} />
                           </div>
 
                           <span className="font-semibold">{tribe.name}</span>
@@ -265,15 +262,15 @@ export default function PublicCampRanking() {
               </table>
             </div>
 
-            <div className="mt-10 space-y-3 md:hidden">
+            <div className="mt-4 space-y-2 md:hidden">
               {ranking.map((tribe, index) => (
                 <article
                   key={tribe.id}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                  className="rounded-2xl border border-zinc-800 bg-zinc-900 p-3"
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl font-black text-yellow-500">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 text-sm font-bold text-yellow-500">
                         #{index + 1}
                       </span>
 
@@ -281,33 +278,29 @@ export default function PublicCampRanking() {
                         className="flex h-11 w-11 items-center justify-center rounded-xl text-lg"
                         style={{ backgroundColor: tribe.color }}
                       >
-                        {tribe.symbol}
+                        <EntitySymbol value={tribe.symbol} />
                       </div>
 
-                      <h2 className="text-xl font-bold">{tribe.name}</h2>
+                      <h3 className="min-w-0 text-sm font-bold [overflow-wrap:anywhere]">{tribe.name}</h3>
                     </div>
 
-                    <strong
-                      className={`text-3xl font-black ${getPointsColor(tribe.total, index)}`}
-                    >
-                      {tribe.total}
-                    </strong>
                   </div>
 
-                  <div className="mt-5 grid gap-3 text-sm">
-                    <div className="flex justify-between gap-4 border-t border-zinc-800 pt-3">
-                      <span className="text-zinc-500">Pontos positivos</span>
+                  <div className="mt-2 grid grid-cols-3 gap-2 border-t border-zinc-800 pt-2 text-xs">
+                    <div className="min-w-0">
+                      <span className="block text-zinc-400">Pontos +</span>
                       <span className="text-right text-green-400">
                         +{tribe.positivePoints}
                       </span>
                     </div>
 
-                    <div className="flex justify-between gap-4 border-t border-zinc-800 pt-3">
-                      <span className="text-zinc-500">Penalidades</span>
+                    <div className="min-w-0">
+                      <span className="block text-zinc-400">Penalidades</span>
                       <span className="text-right text-red-400">
                         -{tribe.penaltyPoints}
                       </span>
                     </div>
+                    <div className="min-w-0 text-right"><span className="block text-zinc-400">Saldo</span><strong className={getPointsColor(tribe.total, index)}>{tribe.total}</strong></div>
                   </div>
                 </article>
               ))}

@@ -2,7 +2,11 @@
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import { useActiveCamp } from '../hooks/useActiveCamp'
-import { useConfirm } from '../hooks/useConfirm'
+import { useRecordAction } from '../hooks/useRecordAction'
+import SymbolField from '../components/SymbolField'
+import EntitySymbol from '../components/EntitySymbol'
+import RecordActions from '../components/RecordActions'
+import { validateSymbol } from '../utils/symbols'
 import { useToast } from '../hooks/useToast'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
@@ -35,7 +39,7 @@ export default function CampGroups() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { activeCampId } = useActiveCamp()
-  const requestConfirmation = useConfirm()
+  const { run: runAction, busy: actionBusy } = useRecordAction()
   const { showError } = useToast()
 
   useEffect(() => {
@@ -87,8 +91,11 @@ export default function CampGroups() {
 
     if (activeCampId) {
       loadData()
+      const retry = () => { void loadData() }
+      window.addEventListener('acampgestor:retry-reads', retry)
       return () => {
         shouldIgnore = true
+        window.removeEventListener('acampgestor:retry-reads', retry)
       }
     }
 
@@ -159,8 +166,8 @@ export default function CampGroups() {
   }, [participants])
 
   const getActiveStatus = useCallback((tribeId) => {
-    return getTribeParticipants(tribeId).length > 0
-  }, [getTribeParticipants])
+    return tribes.find(room => room.id === tribeId)?.is_active !== false
+  }, [tribes])
 
   function handleEdit(tribe) {
     setEditingId(tribe.id)
@@ -182,35 +189,28 @@ export default function CampGroups() {
     setForm(initialForm)
   }
 
-  async function handleDelete() {
-    const confirmDelete = await requestConfirmation({
-      title: 'Excluir quarto',
-      description:
-        'Tem certeza que deseja excluir este quarto? Essa ação não pode ser desfeita.',
-      confirmLabel: 'Excluir',
-    })
+  async function handleDelete(room = tribes.find(item => item.id === editingId)) {
+    if (!room || saving) return
+    const done = await runAction({ title: `Excluir quarto ${room.name}?`, description: 'Só é possível excluir quartos sem participantes, inspeções ou pontuações. Os vínculos são verificados pelo banco.', confirmLabel: 'Confirmar exclusão' }, async () => {
+      const { error } = await supabase.from('tribes').delete().eq('id', room.id).eq('camp_id', activeCampId).select('id').single()
+      if (error) throw error
+    }, 'Quarto excluído.')
+    if (done) { if (editingId === room.id) handleCancelEdit(); await reloadTribes() }
+  }
 
-    if (!confirmDelete) return
-
-    const { error } = await supabase
-      .from('tribes')
-      .delete()
-      .eq('id', editingId)
-      .eq('camp_id', activeCampId)
-
-    if (error) {
-      logError('CampGroups', error)
-      showError('Erro ao excluir quarto.')
-      return
-    }
-
-    setEditingId(null)
-    setForm(initialForm)
-    await reloadTribes()
+  async function handleStatusToggle(room) {
+    if (saving) return
+    const next = room.is_active === false
+    const done = await runAction({ title: `${next ? 'Ativar' : 'Inativar'} quarto ${room.name}?`, description: 'Os participantes e as inspeções existentes serão preservados.', confirmLabel: next ? 'Ativar' : 'Inativar', destructive: !next }, async () => {
+      const { error } = await supabase.from('tribes').update({ is_active: next }).eq('id', room.id).eq('camp_id', activeCampId).select('id').single()
+      if (error) throw error
+    }, 'Status do quarto atualizado.')
+    if (done) await reloadTribes()
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (saving || actionBusy) return
 
     if (!activeCampId) {
       showError('Selecione um acampamento antes de cadastrar quartos.')
@@ -232,13 +232,15 @@ export default function CampGroups() {
     }
 
     const originalRoom = tribes.find(room => room.id === editingId)
+    const symbolError = validateSymbol(form.symbol, originalRoom?.symbol || '')
+    if (symbolError) { showError(symbolError); return }
     const typeError = validateRoomType(form.room_type, originalRoom?.room_type, Boolean(editingId))
     if (typeError) { showError(typeError); return }
     setSaving(true)
 
     const payload = {
       name: form.name.trim(),
-      symbol: form.symbol.trim(),
+      symbol: editingId && form.symbol === originalRoom?.symbol ? originalRoom.symbol : form.symbol.trim(),
       ...(!editingId ? { color: getRoomColor({ camp_id: activeCampId, competition_team_id: form.competition_team_id }, teams) } : {}),
       room_type: editingId && form.room_type === (originalRoom?.room_type || '')
         ? originalRoom.room_type
@@ -246,7 +248,7 @@ export default function CampGroups() {
       competition_team_id: form.competition_team_id,
       room_name: form.room_name.trim() || null,
       leader_name: form.leader_name.trim() || null,
-      is_active: editingId ? getActiveStatus(editingId) : false,
+      is_active: editingId ? getActiveStatus(editingId) : true,
       camp_id: activeCampId,
     }
 
@@ -356,13 +358,7 @@ export default function CampGroups() {
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
           />
 
-          <input
-            name="symbol"
-            value={form.symbol}
-            onChange={handleChange}
-            placeholder="Símbolo"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          />
+          <SymbolField value={form.symbol} original={editingRoom?.symbol} onChange={handleChange} />
 
           <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3">
             <div
@@ -436,7 +432,7 @@ export default function CampGroups() {
             <>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => handleDelete()}
                 className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10"
               >
                 Excluir
@@ -543,7 +539,7 @@ export default function CampGroups() {
                       className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl"
                       style={{ backgroundColor: getRoomColor(tribe, teams) }}
                     >
-                      {tribe.symbol}
+                      <EntitySymbol value={tribe.symbol} />
                     </div>
 
                     <div className="flex flex-wrap justify-end gap-2">
@@ -586,13 +582,7 @@ export default function CampGroups() {
                     </details>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(tribe)}
-                    className="mt-6 w-full rounded-xl border border-zinc-700 py-3 text-sm text-zinc-300 transition hover:bg-zinc-800"
-                  >
-                    Editar
-                  </button>
+                  <div className="mt-6"><RecordActions onEdit={() => handleEdit(tribe)} onDelete={() => handleDelete(tribe)} onToggle={() => handleStatusToggle(tribe)} toggleLabel={activeStatus ? 'Inativar' : 'Ativar'} disabled={saving || actionBusy} /></div>
                 </article>
               )
             })}

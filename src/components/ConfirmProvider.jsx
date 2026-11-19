@@ -12,6 +12,7 @@ const initialDialog = {
 export function ConfirmProvider({ children }) {
   const [dialog, setDialog] = useState(null)
   const cancelButtonRef = useRef(null)
+  const dialogRef = useRef(null)
   const openerRef = useRef(null)
   const pendingResolveRef = useRef(null)
 
@@ -23,7 +24,11 @@ export function ConfirmProvider({ children }) {
     resolve(result)
     setDialog(null)
 
-    window.setTimeout(() => openerRef.current?.focus?.(), 0)
+    window.setTimeout(() => {
+      const opener = openerRef.current
+      if (opener?.isConnected && !opener.disabled) opener.focus({ preventScroll: true })
+      else document.getElementById('main-content')?.focus({ preventScroll: true })
+    }, 0)
   }, [])
 
   const confirm = useCallback((options) => {
@@ -48,11 +53,22 @@ export function ConfirmProvider({ children }) {
     if (!dialog) return undefined
 
     cancelButtonRef.current?.focus()
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
         event.preventDefault()
         closeDialog(false)
+      }
+      if (event.key === 'Tab') {
+        const buttons = dialogRef.current?.querySelectorAll('button:not(:disabled)')
+        if (!buttons?.length) return
+        const first = buttons[0]
+        const last = buttons[buttons.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+        else if (!dialogRef.current.contains(document.activeElement)) { event.preventDefault(); first.focus() }
       }
     }
 
@@ -60,6 +76,7 @@ export function ConfirmProvider({ children }) {
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
     }
   }, [closeDialog, dialog])
 
@@ -77,11 +94,12 @@ export function ConfirmProvider({ children }) {
       {dialog && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
           <section
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
             aria-describedby="confirm-dialog-description"
-            className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-white shadow-2xl shadow-black/40"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-white shadow-2xl shadow-black/40"
           >
             <h2 id="confirm-dialog-title" className="text-xl font-bold">
               {dialog.title}

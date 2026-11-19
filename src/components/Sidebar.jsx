@@ -68,6 +68,13 @@ function buildCampOperationLinks(campAdminBasePath) {
 }
 
 export default function Sidebar({ isMenuOpen = false, onClose }) {
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1023px)')
+    const update = () => setMobile(query.matches)
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
   const location = useLocation()
   const navigate = useNavigate()
   const { isAdmin, isGestor } = useUserProfile()
@@ -259,6 +266,8 @@ export default function Sidebar({ isMenuOpen = false, onClose }) {
   return (
     <aside
       id="camp-navigation"
+      aria-hidden={mobile && !isMenuOpen ? true : undefined}
+      inert={mobile && !isMenuOpen ? true : undefined}
       aria-label="Navegação do painel"
       className={`app-sidebar fixed left-0 z-50 w-[85%] max-w-[280px] overflow-y-auto border-r border-zinc-800 bg-zinc-950 p-4 transition-transform duration-300 lg:sticky lg:w-64 lg:translate-x-0 ${
         isMenuOpen ? 'translate-x-0' : '-translate-x-full'

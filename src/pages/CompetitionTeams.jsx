@@ -2,7 +2,11 @@
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
 import { useActiveCamp } from '../hooks/useActiveCamp'
-import { useConfirm } from '../hooks/useConfirm'
+import { useRecordAction } from '../hooks/useRecordAction'
+import SymbolField from '../components/SymbolField'
+import EntitySymbol from '../components/EntitySymbol'
+import RecordActions from '../components/RecordActions'
+import { validateSymbol } from '../utils/symbols'
 import { useToast } from '../hooks/useToast'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
@@ -48,20 +52,6 @@ function getCompetitionTeamErrorMessage(error, fallback) {
   return fallback
 }
 
-function getDeleteErrorMessage(error) {
-  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase()
-
-  if (
-    error?.code === '23503' ||
-    message.includes('foreign key') ||
-    message.includes('restrict')
-  ) {
-    return 'Esta equipe possui vínculos ou histórico. Inative a equipe em vez de excluí-la.'
-  }
-
-  return 'Erro ao excluir equipe.'
-}
-
 export default function CompetitionTeams() {
   const [teams, setTeams] = useState([])
   const [participants, setParticipants] = useState([])
@@ -70,7 +60,7 @@ export default function CompetitionTeams() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { activeCampId } = useActiveCamp()
-  const requestConfirmation = useConfirm()
+  const { run: runAction, busy: actionBusy } = useRecordAction()
   const { showError } = useToast()
 
   useEffect(() => {
@@ -113,8 +103,11 @@ export default function CompetitionTeams() {
 
     if (activeCampId) {
       loadTeams()
+      const retry = () => { void loadTeams() }
+      window.addEventListener('acampgestor:retry-reads', retry)
       return () => {
         shouldIgnore = true
+        window.removeEventListener('acampgestor:retry-reads', retry)
       }
     }
 
@@ -186,47 +179,28 @@ export default function CompetitionTeams() {
     setForm(initialForm)
   }
 
-  async function handleDelete() {
-    const confirmDelete = await requestConfirmation({
-      title: 'Excluir equipe',
-      description:
-        'Tem certeza que deseja excluir esta equipe? Essa ação não pode ser desfeita.',
-      confirmLabel: 'Excluir',
-    })
-
-    if (!confirmDelete) return
-
-    const { error } = await supabase
-      .from('competition_teams')
-      .delete()
-      .eq('id', editingId)
-      .eq('camp_id', activeCampId)
-
-    if (error) {
-      logError('CompetitionTeams', error)
-      showError(getDeleteErrorMessage(error))
-      return
-    }
-
-    setEditingId(null)
-    setForm(initialForm)
-    await reloadTeams()
+  async function handleDelete(team = teams.find(item => item.id === editingId)) {
+    if (!team || saving) return
+    const done = await runAction({ title: `Excluir equipe ${team.name}?`, description: 'Equipes com quartos, participantes ou histórico não podem ser excluídas. Nesses casos, use Inativar.', confirmLabel: 'Confirmar exclusão' }, async () => {
+      const { error } = await supabase.from('competition_teams').delete().eq('id', team.id).eq('camp_id', activeCampId).select('id').single()
+      if (error) throw error
+    }, 'Equipe excluída.')
+    if (done) { if (editingId === team.id) handleCancelEdit(); await reloadTeams() }
   }
 
   async function handleStatusToggle(team) {
+    if (saving) return
     const nextStatus = team.status === 'active' ? 'inactive' : 'active'
-
+    const done = await runAction({ title: `${nextStatus === 'active' ? 'Ativar' : 'Inativar'} equipe ${team.name}?`, description: 'Inativa, a equipe não aparece no ranking público. Seus pontos e vínculos são preservados e voltam ao ranking após a reativação.', confirmLabel: nextStatus === 'active' ? 'Ativar' : 'Inativar', destructive: nextStatus !== 'active' }, async () => {
     const { error } = await supabase
       .from('competition_teams')
       .update({ status: nextStatus })
       .eq('id', team.id)
       .eq('camp_id', activeCampId)
-
-    if (error) {
-      logError('CompetitionTeams', error)
-      showError('Erro ao alterar status da equipe.')
-      return
-    }
+      .select('id').single()
+    if (error) throw error
+    }, 'Status da equipe atualizado.')
+    if (!done) return
 
     if (editingId === team.id) {
       setForm((currentForm) => ({
@@ -240,6 +214,9 @@ export default function CompetitionTeams() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (saving || actionBusy) return
+    const symbolError = validateSymbol(form.symbol, teams.find(item => item.id === editingId)?.symbol || '')
+    if (symbolError) { showError(symbolError); return }
 
     if (!activeCampId) {
       showError('Selecione um acampamento antes de cadastrar equipes.')
@@ -258,7 +235,7 @@ export default function CompetitionTeams() {
     const payload = {
       name: teamName,
       color: form.color || null,
-      symbol: form.symbol.trim() || null,
+      symbol: editingId && form.symbol === teams.find(item => item.id === editingId)?.symbol ? form.symbol : form.symbol.trim() || null,
       leader_name: form.leader_name.trim() || null,
       status: form.status,
     }
@@ -356,13 +333,7 @@ export default function CompetitionTeams() {
             </span>
           </div>
 
-          <input
-            name="symbol"
-            value={form.symbol}
-            onChange={handleChange}
-            placeholder="Símbolo"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          />
+          <SymbolField value={form.symbol} original={teams.find(item => item.id === editingId)?.symbol} onChange={handleChange} />
 
           <select
             name="status"
@@ -388,7 +359,7 @@ export default function CompetitionTeams() {
             <>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => handleDelete()}
                 className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10"
               >
                 Excluir
@@ -461,7 +432,7 @@ export default function CompetitionTeams() {
                     className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl"
                     style={{ backgroundColor: team.color || '#27272a' }}
                   >
-                    {team.symbol || team.name?.slice(0, 1)}
+                    <EntitySymbol value={team.symbol} fallback={team.name?.slice(0, 1)} />
                   </div>
 
                   <span
@@ -478,7 +449,6 @@ export default function CompetitionTeams() {
                 <h2 className="mt-6 text-2xl font-bold">{team.name}</h2>
 
                 <div className="mt-5 space-y-2 text-sm text-zinc-400">
-                  <p>Símbolo: {team.symbol || 'Não definido'}</p>
                   <p>Responsável: {team.leader_name || 'Não definido'}</p>
                 </div>
 
@@ -496,23 +466,7 @@ export default function CompetitionTeams() {
                   </ul>
                 </details>
 
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(team)}
-                    className="rounded-xl border border-zinc-700 py-3 text-sm text-zinc-300 transition hover:bg-zinc-800"
-                  >
-                    Editar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleStatusToggle(team)}
-                    className="rounded-xl border border-zinc-700 py-3 text-sm text-zinc-300 transition hover:bg-zinc-800"
-                  >
-                    {team.status === 'active' ? 'Inativar' : 'Ativar'}
-                  </button>
-                </div>
+                <div className="mt-6"><RecordActions onEdit={() => handleEdit(team)} onDelete={() => handleDelete(team)} onToggle={() => handleStatusToggle(team)} toggleLabel={team.status === 'active' ? 'Inativar' : 'Ativar'} disabled={saving || actionBusy} /></div>
               </article>
             ))}
           </div>

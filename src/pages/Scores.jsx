@@ -22,6 +22,9 @@ import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import EntitySymbol from '../components/EntitySymbol'
+import RecordActions from '../components/RecordActions'
+import { useActorNames } from '../hooks/useActorNames'
 
 export default function Scores() {
   const [tribes, setTribes] = useState([])
@@ -38,7 +41,8 @@ export default function Scores() {
   const scoreOperation = useRef(createResultOperation(supabase))
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
+  const responsibleName = useActorNames(events, activeCampId)
 
   useEffect(() => {
     let shouldIgnore = false
@@ -147,8 +151,11 @@ export default function Scores() {
 
     if (activeCampId) {
       loadData()
+      const retry = () => { void loadData() }
+      window.addEventListener('acampgestor:retry-reads', retry)
       return () => {
         shouldIgnore = true
+        window.removeEventListener('acampgestor:retry-reads', retry)
       }
     }
 
@@ -313,20 +320,21 @@ export default function Scores() {
     setForm(initialScoreForm)
   }
 
-  async function handleDelete() {
+  async function handleDelete(eventItem = events.find(item => item.id === editingId)) {
+    if (!eventItem || eventItem.is_voided || eventItem.gymkhana_event_id || eventItem.room_inspection_id) return
     if (savingRef.current) return
     savingRef.current = true
     try {
       const confirmed = await requestConfirmation({
-        title: 'Anular lançamento',
+        title: `Anular lançamento: ${eventItem.reason || eventItem.category || 'Pontuação'}?`,
         description: 'O lançamento ficará no histórico, sem contribuir para o saldo.',
         confirmLabel: 'Anular',
       })
       if (!confirmed) return
       setSaving(true)
-      await scoreOperation.current.execute({ campId: activeCampId, kind: 'score', action: 'delete', recordId: editingId })
-      setEditingId(null)
-      setForm(initialScoreForm)
+      await scoreOperation.current.execute({ campId: activeCampId, kind: 'score', action: 'delete', recordId: eventItem.id })
+      if (editingId === eventItem.id) { setEditingId(null); setForm(initialScoreForm) }
+      showSuccess('Lançamento anulado. O histórico foi preservado.')
       await reloadEvents()
     } catch (error) {
       logError('Scores', error)
@@ -447,7 +455,7 @@ export default function Scores() {
               className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
               style={{ backgroundColor: eventItem.competition_teams.color }}
             >
-              {eventItem.competition_teams.symbol}
+              <EntitySymbol value={eventItem.competition_teams.symbol} />
             </div>
             <span>Equipe: {eventItem.competition_teams.name}</span>
           </div>
@@ -457,7 +465,7 @@ export default function Scores() {
               className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
               style={{ backgroundColor: eventItem.tribes.color }}
             >
-              {eventItem.tribes.symbol}
+              <EntitySymbol value={eventItem.tribes.symbol} />
             </div>
             <span>Quarto: {eventItem.tribes.name}</span>
           </div>
@@ -513,19 +521,13 @@ export default function Scores() {
       key: 'actions',
       label: 'Ações',
       render: (eventItem) => eventItem.is_voided ? 'Anulado' : eventItem.gymkhana_event_id || eventItem.room_inspection_id ? 'Gerenciar na origem' : (
-        <button
-          type="button"
-          onClick={() => handleEdit(eventItem)}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
-        >
-          Editar
-        </button>
+        <RecordActions onEdit={() => handleEdit(eventItem)} onDelete={() => handleDelete(eventItem)} deleteLabel="Anular" disabled={saving} />
       ),
     },
     {
       key: 'created_by',
       label: 'Conta responsável',
-      render: (eventItem) => <span className="break-all text-xs text-zinc-400">{eventItem.created_by || 'Não registrada (legado)'}</span>,
+      render: (eventItem) => <span className="text-xs text-zinc-400">{responsibleName(eventItem.created_by)}</span>,
     },
   ]
 
@@ -684,7 +686,7 @@ export default function Scores() {
             <>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => handleDelete()}
                 className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10"
               >
                 Anular

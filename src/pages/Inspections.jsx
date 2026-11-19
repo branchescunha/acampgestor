@@ -15,6 +15,9 @@ import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
 import { getInspectionSchedule, getInspectionRoomOptions, validateInspectionSelection, INSPECTION_DAYS } from '../features/inspections/inspectionSchedule'
 import { getRoomColor } from '../features/rooms/roomForm'
+import EntitySymbol from '../components/EntitySymbol'
+import RecordActions from '../components/RecordActions'
+import { useReadRetry } from '../hooks/useReadRetry'
 
 const initialForm = {
   competition_team_id: '',
@@ -40,7 +43,7 @@ export default function Inspections() {
   const resultOperation = useRef(createResultOperation(supabase))
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
   const scheduleReady = configuration.campId === activeCampId && Boolean(activeCampId)
   const schedule = useMemo(() => getInspectionSchedule(configuration.value), [configuration.value])
   const inspectionSchedule = useMemo(() => schedule.reduce((days, slot) => {
@@ -73,7 +76,7 @@ export default function Inspections() {
       const { data: tribesData, error: tribesError } = await supabase
         .from('tribes')
         .select(
-          'id, camp_id, name, color, symbol, room_name, room_type, competition_team_id'
+          'id, camp_id, name, color, symbol, room_name, room_type, competition_team_id, is_active'
         )
         .eq('camp_id', activeCampId)
         .order('name')
@@ -122,6 +125,8 @@ export default function Inspections() {
     },
     [activeCampId, showError]
   )
+
+  useReadRetry(loadData)
 
   useEffect(() => {
     let shouldIgnore = false
@@ -245,17 +250,17 @@ export default function Inspections() {
     }
   }
 
-  async function handleDelete() {
-    if (!activeCampId || !editingId) return
+  async function handleDelete(inspection = inspections.find(item => item.id === editingId)) {
+    if (!activeCampId || !inspection) return
     if (!operationGuard.current.acquire()) return
     setSaving(true)
 
     try {
       const confirmDelete = await requestConfirmation({
-        title: 'Excluir inspeção',
+        title: `Cancelar inspeção de ${inspection.tribes?.name || 'quarto'}: ${inspection.inspection_day}, ${inspection.inspection_period}?`,
         description:
           'Tem certeza que deseja excluir esta inspeção? Os pontos vinculados serão anulados, preservando o histórico.',
-        confirmLabel: 'Excluir',
+        confirmLabel: 'Confirmar cancelamento',
       })
       if (!confirmDelete) return
 
@@ -263,11 +268,11 @@ export default function Inspections() {
         campId: activeCampId,
         kind: 'inspection',
         action: 'delete',
-        recordId: editingId,
+        recordId: inspection.id,
       })
 
-      setForm(initialForm)
-      setEditingId(null)
+      if (editingId === inspection.id) { setForm(initialForm); setEditingId(null) }
+      showSuccess('Inspeção cancelada. Os pontos foram anulados e o histórico preservado.')
       await loadData()
     } catch (error) {
       logError('Inspections', error)
@@ -306,7 +311,7 @@ export default function Inspections() {
   const activeTribes = useMemo(() => {
     return [...tribes].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
   }, [tribes])
-  const selectableRooms = getInspectionRoomOptions(activeTribes, competitionTeams, activeCampId, form.competition_team_id)
+  const selectableRooms = getInspectionRoomOptions(activeTribes, competitionTeams, activeCampId, form.competition_team_id, originalInspection?.tribe_id)
 
   function getRoomLabel(tribe) {
     if (!tribe) return 'Quarto não encontrado'
@@ -335,7 +340,7 @@ export default function Inspections() {
             className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
             style={{ backgroundColor: getRoomColor(inspection.tribes, competitionTeams) }}
           >
-            {inspection.tribes?.symbol}
+            <EntitySymbol value={inspection.tribes?.symbol} />
           </div>
 
           <span>{getRoomLabel(inspection.tribes)}</span>
@@ -398,14 +403,7 @@ export default function Inspections() {
       key: 'actions',
       label: 'Ações',
       render: (inspection) => (
-        <button
-          type="button"
-          onClick={() => handleEdit(inspection)}
-          disabled={saving}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
-        >
-          Editar
-        </button>
+        <RecordActions onEdit={() => handleEdit(inspection)} onDelete={() => handleDelete(inspection)} deleteLabel="Cancelar" disabled={saving} />
       ),
     },
   ]
@@ -532,7 +530,7 @@ export default function Inspections() {
               <>
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={() => handleDelete()}
                   disabled={saving}
                   className="rounded-xl border border-red-500/40 px-6 py-3 font-semibold text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -579,7 +577,7 @@ export default function Inspections() {
                   className="flex h-12 w-12 items-center justify-center rounded-xl text-lg"
                   style={{ backgroundColor: getRoomColor(tribe, competitionTeams) }}
                 >
-                  {tribe.symbol}
+                  <EntitySymbol value={tribe.symbol} />
                 </div>
 
                 <div>

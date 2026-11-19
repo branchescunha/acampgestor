@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { useAuthContext } from './useAuth'
+import { useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
 
@@ -8,6 +9,7 @@ export function useUserProfile() {
   const [profile, setProfile] = useState(null)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [error, setError] = useState('')
+  const loadFailed = useRef(false)
 
   useEffect(() => {
     let isMounted = true
@@ -25,6 +27,7 @@ export function useUserProfile() {
       if (!isMounted) return
 
       if (profileError) {
+        loadFailed.current = true
         logError('useUserProfile', profileError)
         setProfile(null)
         setError('Não foi possível carregar seu perfil de acesso.')
@@ -32,6 +35,7 @@ export function useUserProfile() {
         return
       }
 
+      loadFailed.current = false
       setProfile(data || null)
       setLoadingProfile(false)
     }
@@ -39,9 +43,12 @@ export function useUserProfile() {
     if (session?.user?.id) {
       loadProfile()
     }
+    const retry = () => { if (session?.user?.id && loadFailed.current) void loadProfile() }
+    window.addEventListener('acampgestor:retry-reads', retry)
 
     return () => {
       isMounted = false
+      window.removeEventListener('acampgestor:retry-reads', retry)
     }
   }, [session])
 

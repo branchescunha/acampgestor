@@ -6,6 +6,7 @@ import { loadCampScoreTotals, readAllPages, totalsAsScoreEntries } from '../feat
 import { getCampNameStorageKey, useActiveCamp } from '../hooks/useActiveCamp'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import EntitySymbol from '../components/EntitySymbol'
 
 export default function Dashboard() {
   const [competitionTeams, setCompetitionTeams] = useState([])
@@ -194,7 +195,7 @@ export default function Dashboard() {
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg sm:h-12 sm:w-12 sm:text-xl"
                 style={{ backgroundColor: leader.color }}
               >
-                {leader.symbol}
+                <EntitySymbol value={leader.symbol} />
               </div>
 
               <div>
@@ -251,7 +252,7 @@ export default function Dashboard() {
                       backgroundColor: eventItem.competition_teams?.color,
                     }}
                   >
-                    {eventItem.competition_teams?.symbol}
+                    <EntitySymbol value={eventItem.competition_teams?.symbol} />
                   </div>
 
                   <div>

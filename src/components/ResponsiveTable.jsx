@@ -56,13 +56,13 @@ export default function ResponsiveTable({ columns, data, emptyMessage }) {
                 {columns.map((column) => (
                   <div
                     key={column.key}
-                    className="flex items-start justify-between gap-4 border-b border-zinc-800 pb-3 last:border-none last:pb-0"
+                    className={`${column.key === 'actions' ? 'grid gap-2' : 'flex items-start justify-between gap-4'} border-b border-zinc-800 pb-3 last:border-none last:pb-0`}
                   >
                     <span className="text-xs uppercase tracking-[0.15em] text-zinc-500">
                       {column.label}
                     </span>
 
-                    <div className="min-w-0 max-w-[65%] break-words text-right text-sm leading-snug">
+                    <div className={`min-w-0 break-words text-sm leading-snug ${column.key === 'actions' ? 'w-full' : 'max-w-[65%] text-right'}`}>
                       {column.render(item)}
                     </div>
                   </div>

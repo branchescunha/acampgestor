@@ -1,371 +1,216 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
+import RecordActions from '../components/RecordActions'
+import { useUserProfile } from '../hooks/useUserProfile'
+import { useRecordAction } from '../hooks/useRecordAction'
 import { supabase } from '../lib/supabase'
-import { logError } from '../utils/logger'
-import { createManagedProfile } from '../features/auth/profileAdministration'
-
-const initialForm = {
-  id: '',
-  name: '',
-  email: '',
-  role: 'gestor',
-  status: 'active',
-}
-
-const roleLabels = {
-  admin: 'Administrador',
-  gestor: 'Gestor',
-}
-
-const statusLabels = {
-  active: 'Ativo',
-  suspended: 'Suspenso',
-}
-
-const statusStyles = {
-  active: 'bg-green-500/20 text-green-400',
-  suspended: 'bg-yellow-500/20 text-yellow-300',
-}
+import { connectionMessage } from '../utils/network'
+import { useReadRetry } from '../hooks/useReadRetry'
 
 export default function Users() {
+  const { isAdmin } = useUserProfile()
   const [profiles, setProfiles] = useState([])
-  const [form, setForm] = useState(initialForm)
-  const [editingId, setEditingId] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [name, setName] = useState('')
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const { run, busy } = useRecordAction()
 
   const loadProfiles = useCallback(async () => {
+    if (!isAdmin) return
     setLoading(true)
-    setError('')
-
     const { data, error: loadError } = await supabase
       .from('profiles')
-      .select('id, name, email, role, status, created_at, updated_at')
-      .order('name', { ascending: true })
-
-    if (loadError) {
-      logError('Users', loadError)
-      setError('Não foi possível carregar os perfis de acesso.')
-      setLoading(false)
-      return
-    }
-
-    setProfiles(data || [])
+      .select('id, name, email, role, status')
+      .order('name')
+    setError(loadError ? connectionMessage(loadError) : '')
+    if (!loadError) setProfiles(data || [])
     setLoading(false)
-  }, [])
+  }, [isAdmin])
+
+  useReadRetry(loadProfiles)
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       void loadProfiles()
     }, 0)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
+    return () => window.clearTimeout(timer)
   }, [loadProfiles])
 
-  function handleChange(event) {
-    const { name, value } = event.target
-
-    setForm((currentForm) => ({
-      ...currentForm,
-      [name]: value,
-    }))
-  }
-
-  function resetForm() {
-    setForm(initialForm)
-    setEditingId(null)
-  }
-
-  function handleEdit(profile) {
-    setEditingId(profile.id)
-    setForm({
-      id: profile.id,
-      name: profile.name || '',
-      email: profile.email || '',
-      role: profile.role || 'gestor',
-      status: profile.status || 'active',
-    })
-    setError('')
-    setSuccess('')
+  function edit(profile) {
+    setEditing(profile)
+    setName(profile.name || '')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function validateForm() {
-    if (!editingId && !form.id.trim()) {
-      return 'Informe o User UID.'
-    }
-
-    if (!form.name.trim()) {
-      return 'Informe o nome.'
-    }
-
-    if (!['admin', 'gestor'].includes(form.role)) {
-      return 'Selecione um papel válido.'
-    }
-
-    if (!['active', 'suspended'].includes(form.status)) {
-      return 'Selecione um status válido.'
-    }
-
-    return ''
-  }
-
-  function getSaveErrorMessage(saveError) {
-    if (saveError.code === '23503') {
-      return 'User UID não encontrado no Supabase Auth. Crie o usuário primeiro em Authentication > Users.'
-    }
-
-    if (saveError.code === '23505') {
-      return 'Já existe um perfil com esse User UID ou e-mail.'
-    }
-
-    return 'Não foi possível salvar o perfil.'
-  }
-
-  async function handleSubmit(event) {
+  async function save(event) {
     event.preventDefault()
-
-    setError('')
-    setSuccess('')
-
-    const validationError = validateForm()
-
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
-    setSaving(true)
-
-    const payload = {
-      name: form.name.trim(),
-      email: form.email.trim() || null,
-      role: form.role,
-      status: form.status,
-      updated_at: new Date().toISOString(),
-    }
-
-    try {
-      if (editingId) {
+    if (!isAdmin || !editing || !name.trim()) return
+    const done = await run(
+      null,
+      async () => {
         const { error: saveError } = await supabase
           .from('profiles')
-          .update(payload)
-          .eq('id', editingId)
+          .update({ name: name.trim(), updated_at: new Date().toISOString() })
+          .eq('id', editing.id)
+          .select('id')
+          .single()
         if (saveError) throw saveError
-      } else {
-        const result = await createManagedProfile(supabase, {
-          ...payload,
-          id: form.id.trim(),
-        })
-
-        if (!result.created) {
-          handleEdit(result.profile)
-          setSuccess(
-            'Perfil já provisionado. Revise os dados, o papel e o status antes de salvar.'
-          )
-          return
-        }
-      }
-
-      resetForm()
+      },
+      'Nome da conta atualizado.'
+    )
+    if (done) {
+      setEditing(null)
       await loadProfiles()
-      setSuccess(
-        editingId
-          ? 'Perfil atualizado com sucesso.'
-          : 'Perfil criado com sucesso.'
-      )
-    } catch (saveError) {
-      logError('Users', saveError)
-      setError(getSaveErrorMessage(saveError))
-    } finally {
-      setSaving(false)
     }
+  }
+
+  async function toggle(profile) {
+    // ADMIN role/status changes require the last-admin protection in migration 019.
+    if (!isAdmin || profile.role !== 'gestor') return
+    const next = profile.status === 'active' ? 'suspended' : 'active'
+    const done = await run(
+      {
+        title: `${next === 'active' ? 'Ativar' : 'Desativar'} acesso de ${profile.name || 'esta conta'}?`,
+        description:
+          next === 'active'
+            ? 'A conta voltará a acessar seus acampamentos.'
+            : 'O acesso operacional será suspenso. A conta Auth, os acampamentos e o histórico serão preservados.',
+        confirmLabel: next === 'active' ? 'Ativar acesso' : 'Desativar acesso',
+        destructive: next !== 'active',
+      },
+      async () => {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ status: next, updated_at: new Date().toISOString() })
+          .eq('id', profile.id)
+          .eq('role', 'gestor')
+          .select('id')
+          .single()
+        if (updateError) throw updateError
+      },
+      'Acesso da conta atualizado.'
+    )
+    if (done) await loadProfiles()
   }
 
   const columns = [
     {
       key: 'name',
       label: 'Nome',
-      render: (profile) => <span className="font-medium">{profile.name}</span>,
+      render: (profile) => profile.name || 'Nome não informado',
     },
     {
       key: 'email',
       label: 'E-mail',
       render: (profile) => (
-        <span className="break-all text-zinc-400">{profile.email || '-'}</span>
-      ),
-    },
-    {
-      key: 'id',
-      label: 'User UID',
-      render: (profile) => (
-        <span className="break-all font-mono text-xs text-zinc-400">
-          {profile.id}
-        </span>
+        <span className="break-all">{profile.email || 'Não informado'}</span>
       ),
     },
     {
       key: 'role',
       label: 'Papel',
-      render: (profile) => (
-        <span className="text-zinc-300">
-          {roleLabels[profile.role] || profile.role}
-        </span>
-      ),
+      render: (profile) =>
+        profile.role === 'admin' ? 'Administrador' : 'Gestor',
     },
     {
       key: 'status',
-      label: 'Status',
-      render: (profile) => (
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            statusStyles[profile.status] || statusStyles.suspended
-          }`}
-        >
-          {statusLabels[profile.status] || profile.status}
-        </span>
-      ),
+      label: 'Acesso',
+      render: (profile) =>
+        profile.status === 'active' ? 'Ativo' : 'Desativado',
     },
     {
       key: 'actions',
       label: 'Ações',
       render: (profile) => (
-        <button
-          type="button"
-          onClick={() => handleEdit(profile)}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
-        >
-          Editar
-        </button>
+        <RecordActions
+          onEdit={() => edit(profile)}
+          disabled={busy}
+          onToggle={
+            profile.role === 'gestor' ? () => toggle(profile) : undefined
+          }
+          toggleLabel={
+            profile.status === 'active' ? 'Desativar acesso' : 'Ativar acesso'
+          }
+        />
       ),
     },
   ]
 
+  if (!isAdmin)
+    return <p role="alert">Acesso exclusivo do administrador da plataforma.</p>
   return (
     <section>
       <PageHeader
         eyebrow="Usuários"
-        title="Perfis de acesso"
-        description="Usuários confirmados recebem um perfil GESTOR automaticamente. Use o User UID para revisar o perfil existente ou cadastrar um perfil ausente."
+        title="Contas existentes"
+        description="Gerencie os nomes e o acesso das contas cadastradas."
       />
-
-      <div className="mb-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-sm text-yellow-100">
-        Esta tela não cria usuários no Supabase Auth. Perfis já provisionados
-        são carregados para revisão, sem sobrescrever papel ou status
-        automaticamente.
-      </div>
-
+      <p className="mb-6 text-sm text-zinc-400">
+        A desativação preserva a conta e seu histórico, mas bloqueia o acesso
+        operacional do gestor. Contas ADMIN permitem apenas alteração do nome
+        nesta tela. A exclusão definitiva depende de revisão dos vínculos no
+        Supabase Auth.
+      </p>
       {error && (
-        <p
-          role="alert"
-          className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-        >
-          {error}
-        </p>
-      )}
-
-      {success && (
-        <p
-          role="status"
-          className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
-        >
-          {success}
-        </p>
-      )}
-
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6"
-      >
-        <h2 className="text-xl font-bold">
-          {editingId ? 'Editar perfil' : 'Criar perfil'}
-        </h2>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <input
-            name="id"
-            value={form.id}
-            onChange={handleChange}
-            disabled={Boolean(editingId)}
-            placeholder="User UID"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-sm outline-none focus:border-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
-          />
-
-          <input
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            placeholder="Nome"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          />
-
-          <input
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            type="email"
-            placeholder="E-mail"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          />
-
-          <select
-            name="role"
-            value={form.role}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+        <div role="alert" className="mb-4 text-red-400">
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={loadProfiles}
+            className="record-action mt-2"
           >
-            <option value="admin">Administrador</option>
-            <option value="gestor">Gestor</option>
-          </select>
-
-          <select
-            name="status"
-            value={form.status}
-            onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
-          >
-            <option value="active">Ativo</option>
-            <option value="suspended">Suspenso</option>
-          </select>
+            Tentar novamente
+          </button>
         </div>
-
-        <div className="mt-6 flex flex-col justify-end gap-3 sm:flex-row">
-          {editingId && (
+      )}
+      {editing && (
+        <form
+          onSubmit={save}
+          className="mb-6 space-y-4 rounded-lg border border-zinc-800 bg-zinc-900 p-5"
+        >
+          <h2 className="text-lg font-bold">Editar conta</h2>
+          <label className="block text-sm">
+            Nome
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 p-3"
+            />
+          </label>
+          <p className="text-sm text-zinc-400">
+            Papel: {editing.role === 'admin' ? 'Administrador' : 'Gestor'}
+          </p>
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={resetForm}
-              className="rounded-xl border border-zinc-700 px-6 py-3 font-semibold text-zinc-300 transition hover:bg-zinc-800"
+              disabled={busy}
+              onClick={() => setEditing(null)}
+              className="record-action"
             >
               Cancelar
             </button>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-zinc-950 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
-      </form>
-
-      <div className="mt-8">
-        {loading ? (
-          <p className="text-zinc-400">Carregando usuários...</p>
-        ) : (
-          <ResponsiveTable
-            columns={columns}
-            data={profiles}
-            emptyMessage="Nenhum perfil de acesso encontrado."
-          />
-        )}
-      </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className="record-action bg-yellow-500 text-zinc-950"
+            >
+              {busy ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      )}
+      {loading ? (
+        <p>Carregando contas...</p>
+      ) : (
+        <ResponsiveTable
+          columns={columns}
+          data={profiles}
+          emptyMessage="Nenhuma conta encontrada."
+        />
+      )}
     </section>
   )
 }

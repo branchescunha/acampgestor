@@ -7,6 +7,9 @@ import { useAuthContext } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import RecordActions from '../components/RecordActions'
+import { useRecordAction } from '../hooks/useRecordAction'
+import { useReadRetry } from '../hooks/useReadRetry'
 
 const campStatusLabels = {
   active: 'Ativo',
@@ -32,7 +35,8 @@ export default function Gestor() {
     loading: loadingProfile,
     error: profileError,
   } = useUserProfile()
-  const { setActiveCamp } = useActiveCamp()
+  const { setActiveCamp, activeCampId, clearActiveCamp } = useActiveCamp()
+  const { run: runAction, busy: actionBusy } = useRecordAction()
   const [camps, setCamps] = useState([])
   const [loadingCamps, setLoadingCamps] = useState(true)
   const [error, setError] = useState('')
@@ -41,7 +45,6 @@ export default function Gestor() {
   const [success, setSuccess] = useState('')
 
   const loadCamps = useCallback(async () => {
-    setLoadingCamps(true)
     setError('')
 
     const { data, error: campsError } = await supabase
@@ -59,6 +62,26 @@ export default function Gestor() {
     setCamps(data || [])
     setLoadingCamps(false)
   }, [])
+
+  useReadRetry(loadCamps)
+
+  async function handleArchive(camp) {
+    if (creatingCamp || editingCamp || camp.status === 'archived') return
+    const done = await runAction({ title: `Arquivar acampamento ${camp.name}?`, description: 'Seus dados e histórico serão preservados. O ranking público será desabilitado. A exclusão definitiva não será realizada.', confirmLabel: 'Arquivar' }, async () => {
+      const { error: archiveError } = await supabase.from('camps').update({ status: 'archived', public_ranking_enabled: false, updated_at: new Date().toISOString() }).eq('id', camp.id).select('id').single()
+      if (archiveError) throw archiveError
+    }, 'Acampamento arquivado. Os dados foram preservados.')
+    if (done) { if (activeCampId === camp.id) clearActiveCamp(); await loadCamps() }
+  }
+
+  async function handleRestore(camp) {
+    if (creatingCamp || editingCamp) return
+    const done = await runAction({ title: `Reativar acampamento ${camp.name}?`, description: 'O acampamento ficará ativo e seu ranking voltará a ser público. Todos os registros serão preservados.', confirmLabel: 'Reativar', destructive: false }, async () => {
+      const { error: restoreError } = await supabase.from('camps').update({ status: 'active', public_ranking_enabled: true, updated_at: new Date().toISOString() }).eq('id', camp.id).select('id').single()
+      if (restoreError) throw restoreError
+    }, 'Acampamento reativado.')
+    if (done) await loadCamps()
+  }
 
   useEffect(() => {
     if (session && isGestor) {
@@ -247,7 +270,7 @@ export default function Gestor() {
                     <p className="mt-5 text-sm text-zinc-500">
                       Este acampamento ainda não possui URL de acesso.
                     </p>
-                    <button type="button" className="mt-5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800" onClick={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>Editar acampamento</button>
+                    <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Reativar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
                   </div>
                 )
               }
@@ -262,7 +285,7 @@ export default function Gestor() {
                 >
                   {content}
                 </Link>
-                <button type="button" className="mt-5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800" onClick={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>Editar acampamento</button>
+                <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Reativar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
                 </article>
               )
             })}

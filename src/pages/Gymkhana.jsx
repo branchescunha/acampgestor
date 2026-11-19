@@ -14,6 +14,9 @@ import { useConfirm } from '../hooks/useConfirm'
 import { useToast } from '../hooks/useToast'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import EntitySymbol from '../components/EntitySymbol'
+import RecordActions from '../components/RecordActions'
+import { useReadRetry } from '../hooks/useReadRetry'
 
 const initialForm = {
   title: '',
@@ -40,7 +43,7 @@ export default function Gymkhana() {
   const resultOperation = useRef(createResultOperation(supabase))
   const { activeCampId } = useActiveCamp()
   const requestConfirmation = useConfirm()
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
 
   const loadData = useCallback(
     async (shouldIgnore = () => false) => {
@@ -137,6 +140,8 @@ export default function Gymkhana() {
     },
     [activeCampId]
   )
+
+  useReadRetry(loadData)
 
   useEffect(() => {
     let shouldIgnore = false
@@ -290,10 +295,10 @@ export default function Gymkhana() {
 
     try {
       const confirmDelete = await requestConfirmation({
-        title: 'Excluir lançamento da gincana',
+        title: `Cancelar gincana ${eventItem.title || 'selecionada'}?`,
         description:
           'Tem certeza que deseja excluir este lançamento da gincana? As pontuações vinculadas serão anuladas, preservando o histórico.',
-        confirmLabel: 'Excluir',
+        confirmLabel: 'Confirmar cancelamento',
       })
       if (!confirmDelete) return
 
@@ -309,6 +314,7 @@ export default function Gymkhana() {
         setForm(initialForm)
       }
 
+      showSuccess('Gincana cancelada. Os pontos foram anulados e o histórico preservado.')
       await loadData()
     } catch (error) {
       logError('Gymkhana', error)
@@ -371,7 +377,7 @@ export default function Gymkhana() {
                 className="flex h-12 w-12 items-center justify-center rounded-2xl text-xl"
                 style={{ backgroundColor: team.color }}
               >
-                {team.symbol}
+                <EntitySymbol value={team.symbol} />
               </div>
 
               <div>
@@ -468,14 +474,7 @@ export default function Gymkhana() {
       key: 'actions',
       label: 'Ações',
       render: (eventItem) => (
-        <button
-          type="button"
-          onClick={() => handleEdit(eventItem)}
-          disabled={saving}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800"
-        >
-          Editar
-        </button>
+        <RecordActions onEdit={() => handleEdit(eventItem)} onDelete={() => handleDelete(eventItem)} deleteLabel="Cancelar" disabled={saving} />
       ),
     },
   ]

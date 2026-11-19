@@ -31,7 +31,7 @@
   --body-text: #cbd2dc;
   --heading: #dde2e8;
   --foreground: #f5f7fa;
-  --toolbar-height: 48px;
+  --toolbar-height: calc(52px + env(safe-area-inset-top, 0px));
 }
 
 :root[data-theme='light'] {
@@ -81,12 +81,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: env(safe-area-inset-top, 0px) max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
 .app-wordmark { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700; color: var(--foreground); text-decoration: none; }
-.theme-toggle { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 8px; color: var(--foreground); background: var(--canvas); cursor: pointer; }
+.theme-toggle { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 8px; color: var(--foreground); background: var(--canvas); cursor: pointer; }
 .theme-toggle:hover { border-color: #cba34f; }
 .skip-link { position: absolute; left: 12px; top: -100px; padding: 8px 14px; background: var(--panel); color: var(--foreground); border: 2px solid #cba34f; border-radius: 6px; }
 .skip-link:focus { top: 5px; z-index: 80; }
@@ -112,24 +112,26 @@ button {
   font: inherit;
 }
 
-input[type='date'] {
+input:is([type='date'], [type='datetime-local'], [type='time']) {
   display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
   min-height: 48px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   font: inherit;
   color-scheme: inherit;
 }
 
-input[type='date']::-webkit-datetime-edit {
+input:is([type='date'], [type='datetime-local'], [type='time'])::-webkit-datetime-edit {
   min-width: 0;
   max-width: 100%;
   padding: 0;
 }
 
-input[type='date']::-webkit-date-and-time-value {
+input:is([type='date'], [type='datetime-local'], [type='time'])::-webkit-date-and-time-value {
   width: 100%;
   min-height: 1.5em;
   text-align: left;
@@ -140,3 +142,23 @@ input[type='date']::-webkit-calendar-picker-indicator {
   margin-left: 0.5rem;
   opacity: 0.75;
 }
+
+form, fieldset, form .grid > *, form .flex > *, article { min-width: 0; }
+input, select, textarea { min-width: 0; }
+article h2, td, dd, [role='dialog'] { overflow-wrap: anywhere; }
+.entity-symbol { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; min-width: 0; max-width: 100%; max-height: 100%; line-height: 1.1; text-align: center; overflow-wrap: anywhere; vertical-align: middle; }
+div:has(> .entity-symbol) { flex-shrink: 0; }
+.entity-symbol-legacy { display: block; padding: 2px; font-size: 9px; overflow: auto; white-space: normal; }
+.record-actions { display: grid; gap: 8px; min-width: 0; max-width: 100%; }
+.record-actions-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.record-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 0; padding: 8px 10px; font-size: 12px; border: 1px solid var(--line-strong); border-radius: 8px; cursor: pointer; }
+.record-action:hover { background: var(--line); }
+.record-action:disabled { opacity: 0.5; }
+.record-action-danger { color: var(--color-red-400); border-color: color-mix(in srgb, var(--color-red-400) 50%, transparent); }
+.connection-notice { position: sticky; top: var(--toolbar-height); z-index: 60; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid #cba34f; font-size: 13px; }
+.ranking-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 8px; margin-top: 24px; padding-top: 12px; }
+.podium-place { min-width: 0; height: 180px; padding: 12px 6px; text-align: center; overflow-wrap: anywhere; }
+.podium-place-1 { height: 204px; }
+@media (min-width: 768px) { .ranking-podium { gap: 16px; } .podium-place { height: 214px; padding: 24px 16px; } .podium-place-1 { height: 244px; } }
+@media (max-width: 1023px) { .app-sidebar[aria-hidden='true'] { visibility: hidden; } }
+@media (max-width: 767px) { input:is([type='date'], [type='datetime-local'], [type='time']) { font-size: 16px; } }

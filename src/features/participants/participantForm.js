@@ -34,13 +34,14 @@ export function selectParticipantTeam(form, competitionTeamId) {
   return { ...form, competition_team_id: competitionTeamId, tribe_id: '' }
 }
 
-export function filterParticipantRooms(tribes, competitionTeamId, activeCampId) {
+export function filterParticipantRooms(tribes, competitionTeamId, activeCampId, originalRoomId) {
   if (!competitionTeamId || !activeCampId) return []
 
   return tribes.filter(
     (tribe) =>
       tribe.competition_team_id === competitionTeamId &&
-      tribe.camp_id === activeCampId,
+      tribe.camp_id === activeCampId &&
+      (tribe.is_active !== false || tribe.id === originalRoomId),
   )
 }
 
@@ -49,6 +50,7 @@ export function validateParticipantForm(
   activeCampId,
   competitionTeams = [],
   tribes = [],
+  original,
 ) {
   if (!activeCampId) {
     return 'Selecione um acampamento antes de cadastrar participantes.'
@@ -82,7 +84,7 @@ export function validateParticipantForm(
     return 'Selecione o quarto.'
   }
 
-  const room = filterParticipantRooms(tribes, team.id, activeCampId).find(
+  const room = filterParticipantRooms(tribes, team.id, activeCampId, original?.tribe_id).find(
     (item) => item.id === form.tribe_id,
   )
 

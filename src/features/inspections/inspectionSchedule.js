@@ -36,12 +36,12 @@ export function includeUsedInspectionSlots(schedule, usedSlots) {
   const selected = new Set([...schedule, ...usedSlots].map(slotKey))
   return ALL_INSPECTION_SLOTS.filter(slot => selected.has(slotKey(slot))).map(slot => ({ ...slot }))
 }
-export function getInspectionRoomOptions(rooms, teams, campId, teamId) {
+export function getInspectionRoomOptions(rooms, teams, campId, teamId, originalRoomId) {
   if (!campId || !teamId || !teams.some(team => team.id === teamId && team.camp_id === campId)) return []
-  return rooms.filter(room => room.camp_id === campId && room.competition_team_id === teamId)
+  return rooms.filter(room => room.camp_id === campId && room.competition_team_id === teamId && (room.is_active !== false || room.id === originalRoomId))
 }
 export function validateInspectionSelection({ campId, teamId, roomId, day, period, schedule, rooms, teams, original }) {
-  if (!getInspectionRoomOptions(rooms, teams, campId, teamId).some(room => room.id === roomId)) return 'Selecione uma equipe e um quarto vinculado a ela neste acampamento.'
+  if (!getInspectionRoomOptions(rooms, teams, campId, teamId, original?.tribe_id).some(room => room.id === roomId)) return 'Selecione uma equipe e um quarto ativo vinculado a ela neste acampamento.'
   if (!day || !period) return 'Selecione o dia e o turno da inspeção.'
   if (schedule.some(slot => slot.day === day && slot.period === period)) return ''
   if (original?.tribe_id === roomId && original.inspection_day === day && original.inspection_period === period) return ''

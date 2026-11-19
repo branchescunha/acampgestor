@@ -7,6 +7,8 @@ import { readAllPages } from '../features/scores/scoreTotals'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
+import EntitySymbol from '../components/EntitySymbol'
+import { useActorNames } from '../hooks/useActorNames'
 
 const initialFilters = {
   search: '',
@@ -25,6 +27,7 @@ export default function History() {
   const [filters, setFilters] = useState(initialFilters)
   const [loading, setLoading] = useState(true)
   const { activeCampId } = useActiveCamp()
+  const responsibleName = useActorNames(events, activeCampId)
 
   useEffect(() => {
     let shouldIgnore = false
@@ -121,8 +124,11 @@ export default function History() {
 
     if (activeCampId) {
       loadData()
+      const retry = () => { void loadData() }
+      window.addEventListener('acampgestor:retry-reads', retry)
       return () => {
         shouldIgnore = true
+        window.removeEventListener('acampgestor:retry-reads', retry)
       }
     }
 
@@ -286,7 +292,7 @@ export default function History() {
               className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
               style={{ backgroundColor: destination.color }}
             >
-              {destination.symbol}
+              <EntitySymbol value={destination.symbol} />
             </div>
 
             <div>
@@ -346,7 +352,7 @@ export default function History() {
     {
       key: 'created_by',
       label: 'Conta responsável',
-      render: (eventItem) => <span className="break-all text-xs text-zinc-400">{eventItem.created_by || 'Não registrada (legado)'}</span>,
+      render: (eventItem) => <span className="text-xs text-zinc-400">{responsibleName(eventItem.created_by)}</span>,
     },
   ]
 
