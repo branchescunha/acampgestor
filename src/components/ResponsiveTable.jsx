@@ -1,12 +1,12 @@
 export default function ResponsiveTable({ columns, data, emptyMessage }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800">
-      <div className="hidden overflow-x-auto md:block" tabIndex={0} role="region" aria-label="Tabela de registros">
-        <table className="w-full min-w-[760px] border-collapse">
+    <div className="responsive-records overflow-hidden rounded-2xl border border-zinc-800">
+      <div className="records-table-view overflow-x-auto" tabIndex={0} role="region" aria-label="Tabela de registros">
+        <table className="records-table w-full min-w-[760px] border-collapse">
           <thead className="bg-zinc-900">
             <tr className="text-left text-sm">
               {columns.map((column) => (
-                <th key={column.key} className="px-6 py-4">
+                <th key={column.key} className={`px-4 py-4 ${column.key === 'actions' ? 'record-actions-cell' : ''}`}>
                   {column.label}
                 </th>
               ))}
@@ -30,7 +30,7 @@ export default function ResponsiveTable({ columns, data, emptyMessage }) {
                   className="border-t border-zinc-800 bg-zinc-950 text-sm"
                 >
                   {columns.map((column) => (
-                    <td key={column.key} className="px-6 py-4">
+                    <td key={column.key} className={`px-4 py-4 ${column.key === 'actions' ? 'record-actions-cell' : ''}`}>
                       {column.render(item)}
                     </td>
                   ))}
@@ -41,7 +41,7 @@ export default function ResponsiveTable({ columns, data, emptyMessage }) {
         </table>
       </div>
 
-      <div className="space-y-3 p-4 md:hidden">
+      <div className="record-cards space-y-3 p-4">
         {data.length === 0 ? (
           <p className="py-6 text-center text-sm text-zinc-500">
             {emptyMessage}

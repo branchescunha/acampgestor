@@ -109,35 +109,52 @@ textarea,
 button {
   max-width: 100%;
   box-sizing: border-box;
-  font: inherit;
+  font-family: inherit;
 }
 
-input:is([type='date'], [type='datetime-local'], [type='time']) {
+.date-field {
   display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  box-sizing: border-box;
   min-height: 48px;
   min-inline-size: 0;
   max-inline-size: 100%;
+}
+
+.date-field:focus-within { border-color: var(--color-yellow-500); }
+
+/* iOS native temporal controls mis-size width:100% with padding (WebKit 301648).
+   The wrapper owns the spacing/border; the actual input has no horizontal inset. */
+.date-field-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-inline-size: 0;
+  min-height: 1.5em;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
   color-scheme: inherit;
 }
 
-input:is([type='date'], [type='datetime-local'], [type='time'])::-webkit-datetime-edit {
+.date-field-input::-webkit-datetime-edit {
   min-width: 0;
   max-width: 100%;
   padding: 0;
 }
 
-input:is([type='date'], [type='datetime-local'], [type='time'])::-webkit-date-and-time-value {
-  width: 100%;
+.date-field-input::-webkit-date-and-time-value {
   min-height: 1.5em;
   text-align: left;
 }
 
-input[type='date']::-webkit-calendar-picker-indicator {
+.date-field-input::-webkit-calendar-picker-indicator {
   flex-shrink: 0;
   margin-left: 0.5rem;
   opacity: 0.75;
@@ -149,9 +166,22 @@ article h2, td, dd, [role='dialog'] { overflow-wrap: anywhere; }
 .entity-symbol { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; min-width: 0; max-width: 100%; max-height: 100%; line-height: 1.1; text-align: center; overflow-wrap: anywhere; vertical-align: middle; }
 div:has(> .entity-symbol) { flex-shrink: 0; }
 .entity-symbol-legacy { display: block; padding: 2px; font-size: 9px; overflow: auto; white-space: normal; }
+.entity-symbol-2 { font-size: 16px; }
+.entity-symbol-3 { font-size: 12px; }
 .record-actions { display: grid; gap: 8px; min-width: 0; max-width: 100%; }
-.record-actions-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.record-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 0; padding: 8px 10px; font-size: 12px; border: 1px solid var(--line-strong); border-radius: 8px; cursor: pointer; }
+.record-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.record-actions-row > .record-action { flex: 1 1 5.5rem; }
+.record-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 0; padding: 8px 10px; font-size: 12px; border: 1px solid var(--line-strong); border-radius: 8px; cursor: pointer; overflow-wrap: normal; word-break: normal; }
+.record-action svg { flex-shrink: 0; }
+.responsive-records { min-width: 0; container: records / inline-size; }
+.records-table-view { display: none; }
+.record-cards { display: block; }
+@container records (min-width: 64rem) {
+  .records-table-view { display: block; }
+  .record-cards { display: none; }
+}
+.records-table .record-actions-cell { width: 14rem; min-width: 14rem; }
+.records-table .rounded-full { display: inline-flex; white-space: nowrap; }
 .record-action:hover { background: var(--line); }
 .record-action:disabled { opacity: 0.5; }
 .record-action-danger { color: var(--color-red-400); border-color: color-mix(in srgb, var(--color-red-400) 50%, transparent); }
@@ -160,5 +190,12 @@ div:has(> .entity-symbol) { flex-shrink: 0; }
 .podium-place { min-width: 0; height: 180px; padding: 12px 6px; text-align: center; overflow-wrap: anywhere; }
 .podium-place-1 { height: 204px; }
 @media (min-width: 768px) { .ranking-podium { gap: 16px; } .podium-place { height: 214px; padding: 24px 16px; } .podium-place-1 { height: 244px; } }
+@media (max-width: 767px) {
+  .podium-place-1 { height: 240px; }
+  .podium-place-2 { height: 210px; }
+  .podium-place-3 { height: 180px; }
+  .podium-place-1 .podium-symbol { width: 56px; height: 56px; font-size: 26px; }
+  .podium-place-3 .podium-symbol { width: 40px; height: 40px; font-size: 18px; }
+  .date-field-input { font-size: 16px; }
+}
 @media (max-width: 1023px) { .app-sidebar[aria-hidden='true'] { visibility: hidden; } }
-@media (max-width: 767px) { input:is([type='date'], [type='datetime-local'], [type='time']) { font-size: 16px; } }

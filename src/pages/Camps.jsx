@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import DateField from '../components/DateField'
+import CampStatusFilter from '../components/CampStatusFilter'
+import { filterCampsByArchive } from '../features/camps/campList'
 import ResponsiveTable from '../components/ResponsiveTable'
 import { useAuthContext } from '../hooks/useAuth'
 import { useActiveCamp } from '../hooks/useActiveCamp'
@@ -45,6 +48,7 @@ export default function Camps() {
   const { isAdmin } = useUserProfile()
   const { run: runAction, busy: actionBusy } = useRecordAction()
   const [camps, setCamps] = useState([])
+  const [showArchived, setShowArchived] = useState(false)
   const [organizations, setOrganizations] = useState([])
   const [form, setForm] = useState(initialForm)
   const [editingId, setEditingId] = useState(null)
@@ -235,6 +239,15 @@ export default function Camps() {
     }
   }
 
+  async function handleRestore(camp) {
+    if (saving || camp.status !== 'archived') return
+    const done = await runAction({ title: `Restaurar acampamento ${camp.name}?`, description: 'O acampamento ficará ativo e o ranking público será habilitado. Todos os dados serão preservados.', confirmLabel: 'Restaurar', destructive: false }, async () => {
+      const { error: restoreError } = await supabase.from('camps').update({ status: 'active', public_ranking_enabled: true, updated_at: new Date().toISOString() }).eq('id', camp.id).select('id').single()
+      if (restoreError) throw restoreError
+    }, 'Acampamento restaurado.')
+    if (done) await loadCamps()
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     if (saving || actionBusy) return
@@ -355,7 +368,8 @@ export default function Camps() {
       label: 'Datas',
       render: (camp) => (
         <span className="text-zinc-400">
-          {formatDateOnly(camp.start_date)} até {formatDateOnly(camp.end_date)}
+          <span className="block whitespace-nowrap">{formatDateOnly(camp.start_date)}</span>
+          <span className="block whitespace-nowrap">até {formatDateOnly(camp.end_date)}</span>
         </span>
       ),
     },
@@ -414,7 +428,7 @@ export default function Camps() {
       label: 'Ações',
       render: (camp) => (
         <div className="grid gap-2">
-          <RecordActions onEdit={() => handleEdit(camp)} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" disabled={saving || actionBusy} />
+          <RecordActions onEdit={() => handleEdit(camp)} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Restaurar" disabled={saving || actionBusy} />
           <button
             type="button"
             disabled={saving || actionBusy || camp.status === 'archived'}
@@ -423,7 +437,7 @@ export default function Camps() {
                 ? handleClearActiveCamp()
                 : setActiveCamp(camp)
             }
-            className="rounded-lg border border-yellow-500/40 px-3 py-2 text-xs font-semibold text-yellow-300 transition hover:bg-yellow-500/10"
+            className="record-action border-yellow-500/40 text-yellow-300 transition hover:bg-yellow-500/10"
           >
             {activeCampId === camp.id ? 'Remover selecao' : 'Selecionar'}
           </button>
@@ -551,7 +565,7 @@ export default function Camps() {
             <span className="mb-2 block text-sm font-medium text-zinc-300">
               Data de início
             </span>
-            <input
+            <DateField
               name="start_date"
               value={form.start_date}
               onChange={handleChange}
@@ -564,7 +578,7 @@ export default function Camps() {
             <span className="mb-2 block text-sm font-medium text-zinc-300">
               Data de término
             </span>
-            <input
+            <DateField
               name="end_date"
               value={form.end_date}
               onChange={handleChange}
@@ -623,13 +637,14 @@ export default function Camps() {
       </form>
 
       <div className="mt-8">
+        <CampStatusFilter camps={camps} showArchived={showArchived} onChange={setShowArchived} />
         {loading ? (
           <p className="text-zinc-400">Carregando acampamentos...</p>
         ) : (
           <ResponsiveTable
             columns={columns}
-            data={camps}
-            emptyMessage="Nenhum acampamento cadastrado."
+            data={filterCampsByArchive(camps, showArchived)}
+            emptyMessage={showArchived ? 'Nenhum acampamento arquivado.' : 'Nenhum acampamento ativo ou em rascunho.'}
           />
         )}
       </div>

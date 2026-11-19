@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import ActiveCampNotice from '../components/ActiveCampNotice'
 import PageHeader from '../components/PageHeader'
+import DateField from '../components/DateField'
 import ResponsiveTable from '../components/ResponsiveTable'
 import {
   buildParticipantPayload,
@@ -530,7 +531,7 @@ export default function Participants() {
             <span className="mb-2 block text-sm font-medium text-zinc-300">
               Data de nascimento
             </span>
-            <input
+            <DateField
               name="birth_date"
               type="date"
               value={form.birth_date}

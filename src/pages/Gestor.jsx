@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { CheckCircle2, CircleDashed, LogOut, Plus, TentTree } from 'lucide-react'
 import CreateCampForm from '../components/CreateCampForm'
+import CampStatusFilter from '../components/CampStatusFilter'
+import { filterCampsByArchive } from '../features/camps/campList'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { useAuthContext } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
@@ -38,6 +40,7 @@ export default function Gestor() {
   const { setActiveCamp, activeCampId, clearActiveCamp } = useActiveCamp()
   const { run: runAction, busy: actionBusy } = useRecordAction()
   const [camps, setCamps] = useState([])
+  const [showArchived, setShowArchived] = useState(false)
   const [loadingCamps, setLoadingCamps] = useState(true)
   const [error, setError] = useState('')
   const [creatingCamp, setCreatingCamp] = useState(false)
@@ -76,10 +79,10 @@ export default function Gestor() {
 
   async function handleRestore(camp) {
     if (creatingCamp || editingCamp) return
-    const done = await runAction({ title: `Reativar acampamento ${camp.name}?`, description: 'O acampamento ficará ativo e seu ranking voltará a ser público. Todos os registros serão preservados.', confirmLabel: 'Reativar', destructive: false }, async () => {
+    const done = await runAction({ title: `Restaurar acampamento ${camp.name}?`, description: 'O acampamento ficará ativo e seu ranking voltará a ser público. Todos os registros serão preservados.', confirmLabel: 'Restaurar', destructive: false }, async () => {
       const { error: restoreError } = await supabase.from('camps').update({ status: 'active', public_ranking_enabled: true, updated_at: new Date().toISOString() }).eq('id', camp.id).select('id').single()
       if (restoreError) throw restoreError
-    }, 'Acampamento reativado.')
+    }, 'Acampamento restaurado.')
     if (done) await loadCamps()
   }
 
@@ -231,9 +234,15 @@ export default function Gestor() {
           </p>
         )}
 
+        <div className="mt-8">
+          <CampStatusFilter camps={camps} showArchived={showArchived} onChange={setShowArchived} />
+        </div>
+        {!error && camps.length > 0 && filterCampsByArchive(camps, showArchived).length === 0 && (
+          <p className="mt-4 text-zinc-400">{showArchived ? 'Nenhum acampamento arquivado.' : 'Nenhum acampamento ativo ou em rascunho.'}</p>
+        )}
         {camps.length > 0 && (
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {camps.map((camp) => {
+            {filterCampsByArchive(camps, showArchived).map((camp) => {
               const content = (
                 <>
                   <div className="flex items-start justify-between gap-4">
@@ -270,7 +279,7 @@ export default function Gestor() {
                     <p className="mt-5 text-sm text-zinc-500">
                       Este acampamento ainda não possui URL de acesso.
                     </p>
-                    <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Reativar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
+                    <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Restaurar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
                   </div>
                 )
               }
@@ -285,7 +294,7 @@ export default function Gestor() {
                 >
                   {content}
                 </Link>
-                <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Reativar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
+                <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Restaurar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
                 </article>
               )
             })}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
+import DateField from './DateField'
 import {
   buildNewCampPayload,
   initialNewCampForm,
@@ -153,7 +154,7 @@ export default function CreateCampForm({ userId, onCreated, onCancel, camp = nul
           >
             Data de início (opcional)
           </label>
-          <input
+          <DateField
             id="new-camp-start"
             name="start_date"
             type="date"
@@ -166,7 +167,7 @@ export default function CreateCampForm({ userId, onCreated, onCancel, camp = nul
           <label htmlFor="new-camp-end" className="block text-sm text-zinc-300">
             Data de fim (opcional)
           </label>
-          <input
+          <DateField
             id="new-camp-end"
             name="end_date"
             type="date"

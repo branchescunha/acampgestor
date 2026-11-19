@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "node --test src/domain/__tests__/*.test.js src/utils/__tests__/*.test.js src/features/__tests__/*.test.js src/features/auth/__tests__/*.test.js src/features/camps/__tests__/*.test.js src/features/export/__tests__/*.test.js src/features/participants/__tests__/*.test.js src/features/scores/__tests__/*.test.js tests/qa-cleanup/*.test.js",
     "test:integration": "node --test tests/integration/*.test.js",
+    "test:visual": "node tests/visual/responsive.mjs",
     "test:all": "npm test && npm run test:integration",
     "qa:inventory": "node scripts/qa-cleanup/cli.js inventory",
     "qa:cleanup:dry-run": "node scripts/qa-cleanup/cli.js dry-run",

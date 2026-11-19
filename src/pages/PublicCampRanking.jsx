@@ -187,7 +187,7 @@ export default function PublicCampRanking() {
                     </span>
 
                     <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl"
+                      className="podium-symbol flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl"
                       style={{ backgroundColor: tribe.color }}
                     >
                       <EntitySymbol value={tribe.symbol} />

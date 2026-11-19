@@ -190,7 +190,7 @@ export default function Dashboard() {
           <p className="text-sm text-zinc-400">Equipe líder</p>
 
           {leader ? (
-            <div className="mt-3 flex items-center gap-3 sm:mt-4 sm:gap-4">
+            <div className="mt-3 flex min-w-0 flex-col items-start gap-3 sm:mt-4 sm:flex-row sm:items-center sm:gap-4">
               <div
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg sm:h-12 sm:w-12 sm:text-xl"
                 style={{ backgroundColor: leader.color }}
@@ -198,7 +198,7 @@ export default function Dashboard() {
                 <EntitySymbol value={leader.symbol} />
               </div>
 
-              <div>
+              <div className="min-w-0 max-w-full [overflow-wrap:anywhere]">
                 <strong className="block text-base sm:text-xl">{leader.name}</strong>
                 <span className="text-sm text-yellow-400">
                   {leader.total} pontos
@@ -243,9 +243,9 @@ export default function Dashboard() {
             {latestEvents.map((eventItem) => (
               <div
                 key={eventItem.id}
-                className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+                className="flex min-w-0 items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4"
               >
-                <div className="flex items-center gap-4">
+                <div className="flex min-w-0 items-center gap-4">
                   <div
                     className="flex h-10 w-10 items-center justify-center rounded-xl"
                     style={{
@@ -255,7 +255,7 @@ export default function Dashboard() {
                     <EntitySymbol value={eventItem.competition_teams?.symbol} />
                   </div>
 
-                  <div>
+                  <div className="min-w-0 [overflow-wrap:anywhere]">
                     <strong>
                       {eventItem.competition_teams?.name || 'Sem equipe'}
                     </strong>
@@ -269,7 +269,7 @@ export default function Dashboard() {
 
                 <strong
                   className={
-                    eventItem.points < 0 ? 'text-red-400' : 'text-green-400'
+                    eventItem.points < 0 ? 'shrink-0 text-red-400' : 'shrink-0 text-green-400'
                   }
                 >
                   {formatPoints(eventItem.points)}
