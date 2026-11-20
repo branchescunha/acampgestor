@@ -296,7 +296,7 @@ test('Auth failures and email conflicts are redacted; unsupported deletion canno
   assert.equal(
     (
       await request({
-        action: 'delete-user',
+        action: 'unsupported-delete',
         targetId: gestorId,
         confirmed: true,
       })

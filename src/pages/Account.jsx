@@ -12,6 +12,8 @@ import {
 } from '../features/auth/account'
 import { invokeAccountAction } from '../features/auth/accountClient'
 import { markFormSaved } from '../utils/navigation'
+import DeleteAccountButton from '../components/DeleteAccountButton'
+import { permanentDeletionEnabled } from '../features/auth/permanentDeletion'
 
 const inputClass =
   'mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3'
@@ -264,6 +266,7 @@ export default function Account() {
           </button>
         </form>
       </div>
+      {isGestor && permanentDeletionEnabled && <section className="mt-8 space-y-4 border-t border-red-500/30 pt-6"><h2 className="text-xl font-semibold">Excluir minha conta</h2><p className="text-sm text-zinc-400">A exclusão definitiva remove sua conta e os dados exclusivos confirmados. Arquivar um acampamento ou desativar o acesso não realiza essa exclusão.</p><DeleteAccountButton self targetId={userId} disabled={busy} /></section>}
     </section>
   )
 }

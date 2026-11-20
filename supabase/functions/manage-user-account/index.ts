@@ -14,5 +14,12 @@ Deno.serve(
     backend: createClient(url, service, options),
     // Enable only after verifying SMTP and secure email-change delivery.
     selfEmailEnabled: Deno.env.get('ACCOUNT_SELF_EMAIL_ENABLED') === 'true',
+    deletionEnabled: Deno.env.get('ACCOUNT_DELETION_ENABLED') === 'true',
+    verifyPassword: async (email: string, password: string) => {
+      const client = createClient(url, anon, options)
+      const { data, error } = await client.auth.signInWithPassword({ email, password })
+      if (data.session) await client.auth.signOut({ scope: 'local' })
+      return error ? null : data.user?.id
+    },
   })
 )

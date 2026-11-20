@@ -212,6 +212,27 @@ export async function createMockContext(
       const payload = request.postDataJSON()
       if (payload.action === 'capabilities')
         return route.fulfill({ json: { selfEmailEnabled: true } })
+      if (['preview-delete-user', 'preview-delete-self', 'delete-user', 'delete-self'].includes(payload.action)) {
+        const self = payload.action.endsWith('self')
+        if ((!self && role !== 'admin') || (self && role !== 'gestor'))
+          return route.fulfill({ status: 403, json: { message: 'Deletion forbidden' } })
+        const target = self ? fixture.user.id : payload.targetId
+        if (payload.action.startsWith('preview-'))
+          return route.fulfill({ json: {
+            target_id: target, state: fixture.deletionPending ? 'pending_auth' : 'preview',
+            blockers: fixture.blockAccountDelete ? ['Resolva a organização compartilhada antes da exclusão.'] : [],
+            camps: fixture.data.camps.filter(camp => camp.created_by === target).map(camp => ({ ...camp, counts: { participants: fixture.data.participants.length, score_events: fixture.data.score_events.length } })),
+          } })
+        if (payload.confirmation !== 'EXCLUIR CONTA' || (self && !payload.password))
+          return route.fulfill({ status: 400, json: { message: 'Confirmation required' } })
+        fixture.authWrites.push({ action: payload.action, targetId: target, passwordVerified: Boolean(payload.password) })
+        if (fixture.failAuthDelete) {
+          fixture.deletionPending = true
+          return route.fulfill({ status: 409, json: { pending: true, message: 'Remoção no Auth pendente. Retome a exclusão pelo ADMIN.' } })
+        }
+        fixture.data.profiles = fixture.data.profiles.filter(profile => profile.id !== target)
+        return route.fulfill({ json: { success: true, state: 'completed' } })
+      }
       if (role !== 'admin')
         return route.fulfill({
           status: 403,
@@ -248,6 +269,19 @@ export async function createMockContext(
       return route.fulfill({ json: { success: true } })
     }
     const table = url.pathname.split('/').pop()
+    if (table === 'delete_camp_permanently') {
+      const payload = request.postDataJSON()
+      const camp = fixture.data.camps.find(camp => camp.id === payload.p_camp_id)
+      if (!camp || (role !== 'admin' && camp.created_by !== fixture.user.id))
+        return route.fulfill({ status: 403, json: { code: '42501', message: 'Forbidden' } })
+      if (payload.p_confirmation !== camp.name)
+        return route.fulfill({ status: 400, json: { code: '22023', message: 'Confirmation required' } })
+      fixture.writes.push({ table, method: 'POST', payload })
+      for (const [key, rows] of Object.entries(fixture.data)) {
+        if (Array.isArray(rows)) fixture.data[key] = rows.filter(row => key === 'camps' ? row.id !== camp.id : row.camp_id !== camp.id)
+      }
+      return route.fulfill({ json: { deleted: true, removed: {} } })
+    }
     if (table === 'delete_empty_organization') {
       const payload = request.postDataJSON()
       if (role !== 'admin')

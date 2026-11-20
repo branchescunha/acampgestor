@@ -12,6 +12,8 @@ import { logError } from '../utils/logger'
 import RecordActions from '../components/RecordActions'
 import { useRecordAction } from '../hooks/useRecordAction'
 import { useReadRetry } from '../hooks/useReadRetry'
+import DeleteCampButton from '../components/DeleteCampButton'
+import Account from './Account'
 
 const campStatusLabels = {
   active: 'Ativo',
@@ -52,7 +54,7 @@ export default function Gestor() {
 
     const { data, error: campsError } = await supabase
       .from('camps')
-      .select('id, name, slug, church_name, theme, status, start_date, end_date, inspection_schedule')
+      .select('id, name, slug, church_name, theme, status, start_date, end_date, inspection_schedule, created_by')
       .order('name', { ascending: true })
 
     if (campsError) {
@@ -67,6 +69,12 @@ export default function Gestor() {
   }, [])
 
   useReadRetry(loadCamps)
+
+  async function handleDeleted(camp) {
+    if (activeCampId === camp.id) clearActiveCamp()
+    setEditingCamp(null)
+    await loadCamps()
+  }
 
   async function handleArchive(camp) {
     if (creatingCamp || editingCamp || camp.status === 'archived') return
@@ -140,6 +148,10 @@ export default function Gestor() {
     )
   }
 
+  if (location.pathname === '/gestor/conta') {
+    return <main className="mx-auto w-full max-w-6xl px-5 py-8"><Link to="/gestor" className="record-action mb-6">Meus acampamentos</Link><Account /></main>
+  }
+
   if (loadingCamps) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
@@ -195,6 +207,7 @@ export default function Gestor() {
               <LogOut size={18} />
               Sair
             </button>
+            <Link to="/gestor/conta" className="record-action">Minha conta</Link>
           </div>
         </div>
 
@@ -218,6 +231,8 @@ export default function Gestor() {
             }}
           />
         )}
+
+        {editingCamp && <div className="mt-4"><DeleteCampButton camp={editingCamp} profile={profile} onDeleted={handleDeleted} /></div>}
 
         {error && (
           <p
@@ -280,6 +295,7 @@ export default function Gestor() {
                       Este acampamento ainda não possui URL de acesso.
                     </p>
                     <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Restaurar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
+                    <div className="mt-2"><DeleteCampButton camp={camp} profile={profile} disabled={actionBusy || creatingCamp || Boolean(editingCamp)} onDeleted={handleDeleted} /></div>
                   </div>
                 )
               }
@@ -295,6 +311,7 @@ export default function Gestor() {
                   {content}
                 </Link>
                 <div className="mt-5"><RecordActions onEdit={() => { setEditingCamp(camp); setCreatingCamp(false); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Restaurar" disabled={actionBusy || creatingCamp || Boolean(editingCamp)} /></div>
+                <div className="mt-2"><DeleteCampButton camp={camp} profile={profile} disabled={actionBusy || creatingCamp || Boolean(editingCamp)} onDeleted={handleDeleted} /></div>
                 </article>
               )
             })}

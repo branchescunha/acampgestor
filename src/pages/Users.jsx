@@ -14,6 +14,7 @@ import {
   validateAccountPassword,
 } from '../features/auth/account'
 import { invokeAccountAction } from '../features/auth/accountClient'
+import DeleteAccountButton from '../components/DeleteAccountButton'
 
 export default function Users() {
   const { isAdmin } = useUserProfile()
@@ -222,7 +223,7 @@ export default function Users() {
       key: 'actions',
       label: 'Ações',
       render: (profile) => (
-        <RecordActions
+        <div className="flex flex-wrap gap-2"><RecordActions
           onEdit={
             ['admin', 'gestor'].includes(profile.role) && !profile.authMissing
               ? () => edit(profile)
@@ -237,7 +238,7 @@ export default function Users() {
           toggleLabel={
             profile.status === 'active' ? 'Desativar acesso' : 'Ativar acesso'
           }
-        />
+        />{profile.role === 'gestor' && !profile.authMissing && <DeleteAccountButton targetId={profile.id} targetName={profile.name} disabled={busy} onDeleted={async () => { setEditing(null); await loadProfiles() }} />}</div>
       ),
     },
   ]

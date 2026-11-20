@@ -203,6 +203,7 @@ export default function App() {
         </Route>
 
         <Route path="/gestor" element={<Gestor />} />
+        <Route path="/gestor/conta" element={<Gestor />} />
 
         <Route path="/:campSlug/gestor" element={<CampAdminRoute />}>
           <Route index element={<Dashboard />} />

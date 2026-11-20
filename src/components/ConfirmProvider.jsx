@@ -11,6 +11,8 @@ const initialDialog = {
 
 export function ConfirmProvider({ children }) {
   const [dialog, setDialog] = useState(null)
+  const [confirmation, setConfirmation] = useState('')
+  const [password, setPassword] = useState('')
   const cancelButtonRef = useRef(null)
   const dialogRef = useRef(null)
   const openerRef = useRef(null)
@@ -23,6 +25,8 @@ export function ConfirmProvider({ children }) {
     pendingResolveRef.current = null
     resolve(result)
     setDialog(null)
+    setConfirmation('')
+    setPassword('')
 
     window.setTimeout(() => {
       const opener = openerRef.current
@@ -62,7 +66,7 @@ export function ConfirmProvider({ children }) {
         closeDialog(false)
       }
       if (event.key === 'Tab') {
-        const buttons = dialogRef.current?.querySelectorAll('button:not(:disabled)')
+        const buttons = dialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled)')
         if (!buttons?.length) return
         const first = buttons[0]
         const last = buttons[buttons.length - 1]
@@ -112,6 +116,20 @@ export function ConfirmProvider({ children }) {
               {dialog.description}
             </p>
 
+            {dialog.details}
+            {dialog.confirmationText && (
+              <label className="mt-4 block text-sm">
+                Digite <strong className="break-words">{dialog.confirmationText}</strong> para confirmar
+                <input autoComplete="off" aria-label="Confirmação da exclusão" value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-2 w-full min-w-0 rounded-lg border border-zinc-700 bg-zinc-900 p-3" />
+              </label>
+            )}
+            {dialog.reauthenticate && (
+              <label className="mt-4 block text-sm">
+                Senha atual
+                <input type="password" autoComplete="current-password" maxLength={128} value={password} onChange={event => setPassword(event.target.value)} className="mt-2 w-full min-w-0 rounded-lg border border-zinc-700 bg-zinc-900 p-3" />
+              </label>
+            )}
+
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
@@ -124,8 +142,9 @@ export function ConfirmProvider({ children }) {
 
               <button
                 type="button"
-                onClick={() => closeDialog(true)}
-                className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
+                disabled={Boolean((dialog.confirmationText && confirmation !== dialog.confirmationText) || (dialog.reauthenticate && !password))}
+                onClick={() => closeDialog(dialog.reauthenticate ? { confirmed: true, password } : true)}
+                className={`rounded-xl px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   dialog.destructive
                     ? 'bg-red-500 text-white hover:bg-red-400'
                     : 'bg-yellow-500 text-zinc-950 hover:bg-yellow-400'

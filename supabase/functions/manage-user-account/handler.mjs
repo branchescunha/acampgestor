@@ -1,3 +1,5 @@
+import { deletionActions, handleAccountDeletion } from './deletion.mjs'
+
 const origins = new Set([
   'https://acampgestor.vercel.app',
   'http://localhost:4000',
@@ -13,6 +15,8 @@ export function createAccountHandler({
   auth,
   backend,
   selfEmailEnabled = false,
+  deletionEnabled = false,
+  verifyPassword = async () => null,
 }) {
   return async (request) => {
     const origin = request.headers.get('Origin') || ''
@@ -50,7 +54,7 @@ export function createAccountHandler({
       if (
         actorError ||
         !actor ||
-        actor.status !== 'active' ||
+        !['active', 'suspended'].includes(actor.status) ||
         !['admin', 'gestor'].includes(actor.role)
       )
         return reply(403, { message: 'Acesso ativo necessário.' })
@@ -65,6 +69,14 @@ export function createAccountHandler({
       }
       if (!body || typeof body !== 'object' || Array.isArray(body))
         return reply(400, { message: 'Solicitação inválida.' })
+      if (deletionActions.has(body.action)) {
+        if (!deletionEnabled) return reply(503, { message: 'Exclusão definitiva ainda não ativada no backend.' })
+        const { data: deletionReady, error: deletionError } = await backend.rpc('permanent_deletion_ready')
+        if (deletionError || deletionReady !== true) return reply(503, { message: 'Migration de exclusão ainda não instalada ou verificada.' })
+        return await handleAccountDeletion({ body, actor, identity: identity.user, backend, reply, verifyPassword })
+      }
+      if (actor.status !== 'active')
+        return reply(403, { message: 'Acesso ativo necessário.' })
       const { data: ready, error: readinessError } = await backend.rpc(
         'account_management_ready'
       )

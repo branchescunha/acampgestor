@@ -17,6 +17,7 @@ import { useUsedInspectionSlots } from '../hooks/useUsedInspectionSlots'
 import RecordActions from '../components/RecordActions'
 import { useRecordAction } from '../hooks/useRecordAction'
 import { useReadRetry } from '../hooks/useReadRetry'
+import DeleteCampButton from '../components/DeleteCampButton'
 
 const initialForm = {
   name: '',
@@ -45,7 +46,7 @@ const statusStyles = {
 
 export default function Camps() {
   const { session } = useAuthContext()
-  const { isAdmin } = useUserProfile()
+  const { isAdmin, profile } = useUserProfile()
   const { run: runAction, busy: actionBusy } = useRecordAction()
   const [camps, setCamps] = useState([])
   const [showArchived, setShowArchived] = useState(false)
@@ -209,6 +210,12 @@ export default function Camps() {
     clearActiveCamp()
     setSuccess('Acampamento ativo removido.')
     setError('')
+  }
+
+  async function handleDeleted(camp) {
+    if (activeCampId === camp.id) clearActiveCamp()
+    if (editingId === camp.id) resetForm()
+    await loadCamps()
   }
 
   async function handleCopyLink(slug) {
@@ -429,6 +436,7 @@ export default function Camps() {
       render: (camp) => (
         <div className="grid gap-2">
           <RecordActions onEdit={() => handleEdit(camp)} onDelete={camp.status !== 'archived' ? () => handleArchive(camp) : undefined} deleteLabel="Arquivar" onToggle={camp.status === 'archived' ? () => handleRestore(camp) : undefined} toggleLabel="Restaurar" disabled={saving || actionBusy} />
+          <DeleteCampButton camp={camp} profile={profile} disabled={saving || actionBusy} onDeleted={handleDeleted} />
           <button
             type="button"
             disabled={saving || actionBusy || camp.status === 'archived'}
@@ -635,6 +643,8 @@ export default function Camps() {
           </div>
         </div>
       </form>
+
+      {editingId && <div className="mt-4"><DeleteCampButton camp={camps.find(camp => camp.id === editingId)} profile={profile} disabled={saving || actionBusy} onDeleted={handleDeleted} /></div>}
 
       <div className="mt-8">
         <CampStatusFilter camps={camps} showArchived={showArchived} onChange={setShowArchived} />

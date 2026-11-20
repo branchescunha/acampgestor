@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createMockContext } from './fixtures.mjs'
 import { accountNavigationInteractions } from './account-navigation.mjs'
+import { permanentDeletionInteractions } from './permanent-deletion.mjs'
 
 const require = createRequire(import.meta.url)
 const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
@@ -433,6 +434,7 @@ const server = spawn(
       VITE_SUPABASE_ANON_KEY: 'visual-fixture-not-a-real-key',
       VITE_ACCOUNT_MANAGEMENT_ENABLED:
         process.env.QA_ACCOUNT_MANAGEMENT_ENABLED || 'false',
+      VITE_PERMANENT_DELETION_ENABLED: process.env.QA_PERMANENT_DELETION_ENABLED || 'false',
     },
   }
 )
@@ -461,7 +463,7 @@ try {
   for (const engine of engines) {
     const browser = await playwright[engine].launch({ headless: true })
     try {
-      for (const mobile of ['interactions', 'account'].includes(phase)
+      for (const mobile of ['interactions', 'account', 'deletion'].includes(phase)
         ? []
         : [true, false]) {
         const groupWidths = widths.filter((width) => width <= 414 === mobile)
@@ -561,9 +563,11 @@ try {
         }
         console.log(`${engine}: ${groupWidths.join(', ')}px approved`)
       }
-      if (!['layout', 'account'].includes(phase))
+      if (!['layout', 'account', 'deletion'].includes(phase))
         await essentialInteractions(browser, engine)
-      if (phase !== 'layout')
+      if (phase === 'deletion')
+        await permanentDeletionInteractions(browser, engine, baseURL, errors)
+      if (!['layout', 'deletion'].includes(phase))
         await accountNavigationInteractions(
           browser,
           engine,
