@@ -2,7 +2,7 @@
 
 A migration 021 foi aplicada em produção em 20/11/2026, com COMMIT confirmado e verificações de estrutura, permissões, RLS e preservação das contagens, identidades e policies anteriores. Migrations 001–020 permanecem intactas. Não reaplicar a 021.
 
-`manage-user-account` está publicada, versão 4, ACTIVE, com `verify_jwt=true` e `ACCOUNT_DELETION_ENABLED=true`. Oito testes HTTP reais de consultas e prévias passaram com ADMIN e GESTOR: prévias permitidas retornaram 200 e alvos indevidos retornaram 403. Nenhuma exclusão real foi executada; esses testes não comprovam o fluxo completo de remoção ou concorrência. A interface depende do build com `VITE_PERMANENT_DELETION_ENABLED=true` em Production na Vercel; essa variável pública não substitui a autorização do banco e da função.
+`manage-user-account` está publicada, versão 4, ACTIVE, com `verify_jwt=true` e `ACCOUNT_DELETION_ENABLED=true`. Oito testes HTTP reais de consultas e prévias passaram com ADMIN e GESTOR: prévias permitidas retornaram 200 e alvos indevidos retornaram 403. Essa rodada não executou exclusões; a validação posterior de remoção de um acampamento está registrada abaixo. Exclusão real de contas e concorrência continuam não validadas. A interface depende do build com `VITE_PERMANENT_DELETION_ENABLED=true` em Production na Vercel; essa variável pública não substitui a autorização do banco e da função.
 
 ## Comportamento
 
@@ -71,7 +71,23 @@ if ($LASTEXITCODE -ne 0) { throw 'Aplicação interrompida. Não repetir automat
 
 Não usar `PGPASSWORD`, arquivo de senha ou transcrição contendo credenciais. Não reaplicar 001–020. Rollback do frontend não desfaz exclusões nem alterações do banco.
 
+## Validação real da exclusão de acampamento
+
+Em 20/11/2026, após autorização específica, foi removido exclusivamente o acampamento sintético `QA REAL V2 qa-real-v2-mwpa1qtg`, ID `f065fc54-bf2b-4140-afec-40a3cc96330b`, slug `qa-real-v2-mwpa1qtg`. O executor terminou com `AUTHORIZED_QA_DELETION_COMPLETED`, `completed: true`, `deletionRequests: 1` e nenhum erro. O alvo e as dependências foram reconferidos antes da confirmação pela interface oficial; não houve SQL manual de exclusão nem repetição da chamada.
+
+- Resposta da RPC oficial: HTTP 200, `deleted: true`.
+- Removidos: 1 acampamento, 2 equipes, 2 quartos, 2 participantes, 5 pontuações, 1 gincana, 1 inspeção e 4 recibos operacionais; 18 registros existentes no conjunto.
+- Preservado: 1 recibo de exclusão desse acampamento para rastreabilidade e idempotência. Todos os contadores operacionais do alvo passaram a zero.
+- Consultas somente leitura antes/depois: zero órfãos nas 21 foreign keys verificadas; contagens e hashes dos registros públicos externos ao alvo permaneceram iguais. Identidades do Auth também foram comparadas sem registrar credenciais.
+- Preservados: outros 2 acampamentos, 3 usuários Auth, 3 profiles, 1 organização, seu vínculo de membro e histórico de terceiros.
+- ADMIN, proprietário e segundo GESTOR mantiveram sessões ativas, acesso às respectivas áreas e escopo de acampamentos correto após a remoção.
+- A URL pública do slug excluído passou a apresentar `Ranking não encontrado ou indisponível`.
+
+O relatório privado está em `%LOCALAPPDATA%\AcampGestor\live-release-validation\authorized-deletion-result.json`, acompanhado dos snapshots somente leitura. Não versionar sessões ou credenciais. Nenhuma conta de usuário foi excluída; esse resultado não comprova exclusão pela API Auth Admin, concorrência ou restauração de backup.
+
 ## Limitações de validação
+
+Em 20/11/2026, o QA operacional real em produção terminou com `LIVE_VALIDATION_COMPLETED`, sem erros, com ADMIN e dois GESTORES distintos. Foram conferidos isolamento, CRUD do acampamento exclusivo de QA, arquivamento/restauração, equipes, quartos, participantes, pontos/penalidades, RPCs de gincana/inspeção, histórico e ranking público. Nessa rodada, as prévias e os modais de exclusão foram verificados sem confirmar remoções. A remoção posterior, autorizada separadamente, está registrada na seção anterior. Nenhuma conta foi excluída. Essa rodada utilizou Chromium desktop e viewport mobile, não dispositivos físicos.
 
 Testes de handlers/adapters, contratos SQL e navegador com API simulada não comprovam execução funcional dos triggers, concorrência ou exclusão pela API Auth Admin em PostgreSQL real. O PostgreSQL local conhecido está incompleto e o Docker indisponível; a suite SQL foi preparada, não declarada aprovada. O preflight e as verificações estruturais reais da instalação passaram; a validação funcional isolada permanece pendente.
 

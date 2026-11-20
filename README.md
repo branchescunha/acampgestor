@@ -20,6 +20,8 @@ Capturas reais da página pública da V2, sem dados de usuários. A prévia de r
 
 - **Plataforma ADMIN:** dashboard, gestão de usuários, organizações e acampamentos, com acesso administrativo às operações.
 - **Área do gestor:** criação e gerenciamento de múltiplos acampamentos independentes.
+- **Contas:** edição do próprio nome e senha; ADMIN gerencia acessos, e-mails e recuperação de contas de gestores. Alteração do próprio e-mail pelo gestor permanece desabilitada.
+- **Ciclo dos acampamentos:** arquivamento, restauração e exclusão definitiva com confirmação e autorização do proprietário ou ADMIN; exclusão de contas protegida pelo backend.
 - **Equipes e quartos:** equipes competitivas com seus quartos e participantes vinculados à equipe e ao quarto correspondente.
 - **Participantes:** cadastro, edição, consulta e organização por equipe e quarto.
 - **Pontuação:** pontos positivos, penalidades, histórico e totalização por equipe.
@@ -62,7 +64,7 @@ tests/            Integração em memória e ferramentas de QA
 docs/             Documentação técnica, capturas e notas de versão
 ```
 
-A versão **2.0.0** está em preparação para entrega, sujeita aos testes operacionais finais. A tag e a GitHub Release definitiva ainda não foram publicadas. As notas estão em [preparação da V2.0.0](docs/releases/v2.0.0.md).
+A aplicação **2.0.0** está publicada, com validação operacional real dos fluxos principais e exclusão controlada do acampamento exclusivo de QA concluídas. Os demais dados e acessos foram preservados. Exclusão real de contas, concorrência, restauração de backup e validação final em dispositivos físicos permanecem não concluídas. Consulte as [notas da V2.0.0](docs/releases/v2.0.0.md) e a [GitHub Release](https://github.com/branchescunha/acampgestor/releases/tag/v2.0.0).
 
 ## Autor
 
