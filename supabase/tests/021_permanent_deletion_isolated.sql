@@ -11,6 +11,12 @@ do $$ begin
   end if;
 end $$;
 
+-- Fresh isolated baseline only. These fixtures reproduce the three production
+-- FKs without copying legacy data; everything below is rolled back.
+create table public.meal_checkpoints (tribe_id uuid references public.tribes(id) on delete cascade);
+create table public.room_checks (tribe_id uuid references public.tribes(id) on delete cascade);
+create table public.gymkhana_members (participant_id uuid references public.participants(id) on delete cascade);
+
 insert into auth.users(id, email) values
  ('21000000-0000-4000-8000-000000000001', 'admin-021@example.invalid'),
  ('21000000-0000-4000-8000-000000000002', 'owner-021@example.invalid'),
@@ -74,6 +80,31 @@ end $$;
 
 -- Inject a failure AFTER earlier deletes. The whole RPC must roll back.
 reset role;
+
+insert into public.meal_checkpoints values ('21000000-0000-4000-8000-000000000031');
+insert into public.room_checks values ('21000000-0000-4000-8000-000000000031');
+insert into public.gymkhana_members values ('21000000-0000-4000-8000-000000000041');
+do $$ declare tab text; rejected boolean; begin
+  foreach tab in array array['meal_checkpoints', 'room_checks', 'gymkhana_members'] loop
+    rejected := false;
+    begin perform public.delete_camp_permanently('21000000-0000-4000-8000-000000000011', 'Fixture full');
+    exception when foreign_key_violation then rejected := true; end;
+    if not rejected or not exists(select 1 from public.camps where id = '21000000-0000-4000-8000-000000000011')
+      or not exists(select 1 from public.score_events where camp_id = '21000000-0000-4000-8000-000000000011') then
+      raise exception 'Legacy dependency was cascaded or deletion was partial';
+    end if;
+    execute format('delete from public.%I', tab);
+  end loop;
+end $$;
+
+create table public.fixture_unknown_dependency_021 (tribe_id uuid references public.tribes(id) on delete cascade);
+do $$ declare rejected boolean := false; begin
+  begin perform public.delete_camp_permanently('21000000-0000-4000-8000-000000000011', 'Fixture full');
+  exception when foreign_key_violation then rejected := true; end;
+  if not rejected then raise exception 'Unknown dependency was accepted'; end if;
+end $$;
+drop table public.fixture_unknown_dependency_021;
+
 create function public.fixture_reject_room_delete_021() returns trigger language plpgsql as $$
 begin raise exception 'Fixture late delete failure'; end $$;
 create trigger fixture_reject_room_delete_021 before delete on public.tribes

@@ -34,6 +34,11 @@ export async function permanentDeletionInteractions(
             fixture.data.camps[0].created_by = fixture.data.profiles.find(profile => profile.role === 'gestor').id
           await page.goto(baseURL + (role === 'admin' ? '/admin/usuarios' : '/gestor/conta'))
           const previewAccount = page.getByRole('button', { name: role === 'admin' ? 'Excluir gestor definitivamente' : 'Excluir conta definitivamente', exact: true }).first()
+          await previewAccount.waitFor()
+          assert.equal(
+            await page.getByRole('button', { name: 'Excluir gestor definitivamente', exact: true }).count(),
+            role === 'admin' ? fixture.data.profiles.filter(profile => profile.role === 'gestor').length : 0
+          )
           await previewAccount.click()
           await page.getByRole('dialog').getByText(fixture.camp.name, { exact: true }).waitFor()
           await page.getByRole('dialog').getByText(/participantes,.*pontuações/).waitFor()

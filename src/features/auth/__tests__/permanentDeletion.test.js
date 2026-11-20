@@ -79,3 +79,19 @@ test('021 contracts preserve audit guards, protect ADMIN and restrict forged act
   const audit = sql.indexOf('delete from public.camp_operation_audit')
   assert.ok(score < participant && participant < room && room < audit)
 })
+
+test('021 preserves reviewed legacy dependents under locks and still rejects unknown relationships', () => {
+  const sql = readFileSync(new URL('../../../../supabase/sql/021_permanent_deletion.sql', import.meta.url), 'utf8')
+  const preflight = readFileSync(new URL('../../../../supabase/tests/021_permanent_deletion_preflight.sql', import.meta.url), 'utf8')
+  for (const table of ['meal_checkpoints', 'room_checks', 'gymkhana_members']) {
+    assert.ok(sql.includes(`to_regclass('public.${table}')`), `Missing lock/review for ${table}`)
+    assert.ok(preflight.includes(`public.${table}`), `Missing inventory for ${table}`)
+    assert.doesNotMatch(sql, new RegExp(`delete from public\\.${table}\\b`, 'i'))
+  }
+  assert.match(sql, /lock table %s in share row exclusive mode/)
+  assert.match(sql, /cardinality\(fk\.conkey\) = 1/)
+  assert.match(sql, /Preserved legacy rows in % prevent deletion/)
+  assert.match(sql, /Unreviewed camp dependency/)
+  assert.match(preflight, /reviewed_legacy_fk/)
+  assert.match(preflight, /total_records/)
+})

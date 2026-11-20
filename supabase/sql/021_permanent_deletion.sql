@@ -38,6 +38,7 @@ revoke all on public.camp_deletion_receipts from public, anon, authenticated;
 -- and prevent records from being moved between camps during graph validation.
 create function public.lock_permanent_deletion()
 returns void language plpgsql security definer set search_path = '' as $$
+declare legacy_table regclass;
 begin
   perform set_config('lock_timeout', '5s', true);
   perform pg_advisory_xact_lock(hashtextextended('acampgestor:profiles:active-admin', 0));
@@ -46,6 +47,13 @@ begin
     public.gymkhana_settings, public.gymkhana_events, public.room_inspections,
     public.score_events, public.camp_operation_receipts, public.camp_operation_audit
     in share row exclusive mode;
+  -- Legacy data is never cascaded away. Lock before checking for references so
+  -- an INSERT cannot slip between validation and the deletion of its parent.
+  for legacy_table in select oid::regclass from pg_class where oid in (
+    to_regclass('public.meal_checkpoints'), to_regclass('public.room_checks'),
+    to_regclass('public.gymkhana_members')) order by oid loop
+    execute format('lock table %s in share row exclusive mode', legacy_table);
+  end loop;
 end $$;
 
 create function public.camp_deletion_counts(p_camp_id uuid)
@@ -72,15 +80,29 @@ declare fk record; child_name text; parent_name text; predicate text; linked boo
     'public.camp_operation_receipts'::regclass::oid, 'public.camp_operation_audit'::regclass::oid];
 begin
   for fk in select * from pg_constraint where contype = 'f' and confrelid = any(allowed) loop
-    if not (fk.conrelid = any(allowed)) then
-      raise exception 'Unreviewed camp dependency: %', fk.conrelid::regclass using errcode = '23503';
-    end if;
     predicate := '';
     for i in 1..cardinality(fk.conkey) loop
       select attname into child_name from pg_attribute where attrelid = fk.conrelid and attnum = fk.conkey[i];
       select attname into parent_name from pg_attribute where attrelid = fk.confrelid and attnum = fk.confkey[i];
       predicate := predicate || case when i > 1 then ' and ' else '' end || format('child.%I = parent.%I', child_name, parent_name);
     end loop;
+    if not (fk.conrelid = any(allowed)) then
+      -- Only the exact legacy FK shapes observed in production are reviewed.
+      -- They may exist, but any linked row blocks this camp's entire deletion.
+      if (cardinality(fk.conkey) = 1 and cardinality(fk.confkey) = 1 and parent_name = 'id' and (
+        (fk.confrelid = 'public.tribes'::regclass and child_name = 'tribe_id'
+          and fk.conrelid in (to_regclass('public.meal_checkpoints'), to_regclass('public.room_checks')))
+        or (fk.confrelid = 'public.participants'::regclass and child_name = 'participant_id'
+          and fk.conrelid = to_regclass('public.gymkhana_members')))) is distinct from true then
+        raise exception 'Unreviewed camp dependency: %', fk.conrelid::regclass using errcode = '23503';
+      end if;
+      execute format('select exists(select 1 from %s child join %s parent on %s where parent.camp_id = $1)',
+        fk.conrelid::regclass, fk.confrelid::regclass, predicate) into linked using p_camp_id;
+      if linked then
+        raise exception 'Preserved legacy rows in % prevent deletion', fk.conrelid::regclass using errcode = '23503';
+      end if;
+      continue;
+    end if;
     execute format('select exists(select 1 from %s child join %s parent on %s where %s = $1 and child.camp_id is distinct from $1)',
       fk.conrelid::regclass, fk.confrelid::regclass, predicate,
       case when fk.confrelid = 'public.camps'::regclass then 'parent.id' else 'parent.camp_id' end)
