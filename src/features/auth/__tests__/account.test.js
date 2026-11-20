@@ -5,7 +5,12 @@ import {
   validateAccountEmail,
   validateAccountPassword,
   accountEmail,
+  accountSelfEmailEnabled,
 } from '../account.js'
+
+test('own email changes remain disabled independently of backend capabilities', () => {
+  assert.equal(accountSelfEmailEnabled, false)
+})
 
 test('account email uses authoritative Auth, never the profile copy', () => {
   assert.equal(

@@ -42,7 +42,7 @@ export async function accountNavigationInteractions(
         (await page
           .getByLabel('E-mail de acesso', { exact: true })
           .getAttribute('readonly')) !== null,
-        role === 'admin' || !enabled
+        true
       )
       await page
         .getByLabel('Nova senha', { exact: true })
@@ -93,22 +93,13 @@ export async function accountNavigationInteractions(
         ])
       }
       if (role === 'gestor' && enabled) {
-        await page
-          .getByLabel('E-mail de acesso', { exact: true })
-          .fill('next@example.invalid')
-        await page
-          .getByRole('button', { name: 'Solicitar alteração de e-mail' })
-          .click()
-        await page
-          .getByRole('status')
-          .filter({ hasText: 'Solicitação enviada.' })
-          .waitFor()
         assert.equal(
           await page
-            .getByLabel('E-mail de acesso', { exact: true })
-            .inputValue(),
-          fixture.user.email
+            .getByRole('button', { name: 'Solicitar alteração de e-mail' })
+            .count(),
+          0
         )
+        assert.equal(fixture.authWrites.some((write) => write.email), false)
       }
 
       // Reload must warn and remain on the same route when cancelled.
@@ -295,7 +286,15 @@ export async function accountNavigationInteractions(
           exact: true,
         })
         .click()
-      await page.waitForTimeout(150)
+      await page.waitForURL(
+        baseURL +
+          (role === 'admin'
+            ? '/admin/usuarios'
+            : '/qa-unificado/gestor/equipes')
+      )
+      await page.waitForFunction(() => window.scrollY === 0, undefined, {
+        timeout: 3000,
+      })
       assert.equal(await page.evaluate(() => window.scrollY), 0)
       assert.equal(
         await page.locator('#camp-navigation').evaluate((el) => el.scrollTop),

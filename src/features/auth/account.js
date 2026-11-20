@@ -27,3 +27,6 @@ export function validateAccountPassword(password, confirmation) {
 // Enable only after migration 020 and the Edge Function have been installed and verified.
 export const accountManagementEnabled =
   import.meta.env?.VITE_ACCOUNT_MANAGEMENT_ENABLED === 'true'
+
+// Own email changes stay unavailable until separately authorized and verified.
+export const accountSelfEmailEnabled = false

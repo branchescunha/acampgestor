@@ -5,6 +5,7 @@ import { useUserProfile } from '../hooks/useUserProfile'
 import {
   accountEmail,
   accountManagementEnabled,
+  accountSelfEmailEnabled,
   validateAccountName,
   validateAccountEmail,
   validateAccountPassword,
@@ -43,7 +44,9 @@ export default function Account() {
             action: 'capabilities',
           })
           if (mounted)
-            setSelfEmailEnabled(capabilities.selfEmailEnabled === true)
+            setSelfEmailEnabled(
+              accountSelfEmailEnabled && capabilities.selfEmailEnabled === true
+            )
         }
       } catch {
         if (mounted)
