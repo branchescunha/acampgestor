@@ -1,3 +1,16 @@
+import { readAllPages } from './scores/scoreTotals.js'
+
+export async function loadCampResultHistory(client, table, campId, columns) {
+  if (!campId) return { data: [], error: null }
+  return readAllPages(() => client.from(table)
+    .select(columns)
+    .eq('camp_id', campId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .order('id')
+  )
+}
+
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize)
   if (value !== null && typeof value === 'object') {

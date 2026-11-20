@@ -7,6 +7,7 @@ import { createOperationGuard } from '../features/scoringOperations'
 import {
   createResultOperation,
   getGymkhanaAwards,
+  loadCampResultHistory,
   validateGymkhanaAwards,
 } from '../features/eventOperations'
 import { useActiveCamp } from '../hooks/useActiveCamp'
@@ -89,14 +90,10 @@ export default function Gymkhana() {
           .eq('is_active', true)
           .order('full_name')
 
-      const { data: historyData, error: historyError } = await supabase
-        .from('gymkhana_events')
-        .select(
-          'id, camp_id, title, awards, winning_team, winning_competition_team_id, points_per_member, notes, created_at'
-        )
-        .eq('camp_id', activeCampId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+      const { data: historyData, error: historyError } = await loadCampResultHistory(
+        supabase, 'gymkhana_events', activeCampId,
+        'id, camp_id, title, awards, winning_team, winning_competition_team_id, points_per_member, notes, created_at'
+      )
 
       const { data: settingsRows, error: settingsError } = await supabase
         .from('gymkhana_settings')

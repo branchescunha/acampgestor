@@ -7,6 +7,7 @@ import { createOperationGuard } from '../features/scoringOperations'
 import {
   createResultOperation,
   isIntegerPoints,
+  loadCampResultHistory,
 } from '../features/eventOperations'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { useConfirm } from '../hooks/useConfirm'
@@ -81,9 +82,8 @@ export default function Inspections() {
         .eq('camp_id', activeCampId)
         .order('name')
 
-      const { data: inspectionsData, error: inspectionsError } = await supabase
-        .from('room_inspections')
-        .select(
+      const { data: inspectionsData, error: inspectionsError } = await loadCampResultHistory(
+        supabase, 'room_inspections', activeCampId,
           `
         *,
         tribes (
@@ -96,10 +96,7 @@ export default function Inspections() {
           competition_team_id
         )
       `
-        )
-        .eq('camp_id', activeCampId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+      )
 
       const { data: teamsData, error: teamsError } = await supabase
         .from('competition_teams')
