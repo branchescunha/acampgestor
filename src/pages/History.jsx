@@ -4,6 +4,7 @@ import PageHeader from '../components/PageHeader'
 import ResponsiveTable from '../components/ResponsiveTable'
 import { getScoreCategories, getScoreTypeLabel } from '../domain/scoring'
 import { readAllPages } from '../features/scores/scoreTotals'
+import { filterScoreEvents } from '../features/scores/scoreForm'
 import { useActiveCamp } from '../hooks/useActiveCamp'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
@@ -55,6 +56,7 @@ export default function History() {
           created_by,
           is_voided,
           tribes (
+            competition_team_id,
             name,
             color,
             symbol
@@ -229,44 +231,9 @@ export default function History() {
   }, [filters.type])
 
   const filteredEvents = useMemo(() => {
-    return events.filter((eventItem) => {
-      const search = filters.search.trim().toLowerCase()
-
-      const matchesSearch = search
-        ? eventItem.reason?.toLowerCase().includes(search) ||
-          eventItem.notes?.toLowerCase().includes(search) ||
-          eventItem.category?.toLowerCase().includes(search) ||
-          eventItem.competition_teams?.name?.toLowerCase().includes(search) ||
-          eventItem.tribes?.name?.toLowerCase().includes(search) ||
-          eventItem.participants?.full_name?.toLowerCase().includes(search)
-        : true
-
-      const matchesCompetitionTeam = filters.competition_team_id
-        ? eventItem.competition_team_id === filters.competition_team_id
-        : true
-
-      const matchesTribe = filters.tribe_id
-        ? eventItem.tribe_id === filters.tribe_id
-        : true
-
-      const matchesParticipant = effectiveParticipantId
-        ? eventItem.participant_id === effectiveParticipantId
-        : true
-
-      const matchesType = filters.type ? eventItem.type === filters.type : true
-
-      const matchesCategory = filters.category
-        ? eventItem.category === filters.category
-        : true
-
-      return (
-        matchesSearch &&
-        matchesCompetitionTeam &&
-        matchesTribe &&
-        matchesParticipant &&
-        matchesType &&
-        matchesCategory
-      )
+    return filterScoreEvents(events, {
+      ...filters,
+      participant_id: effectiveParticipantId,
     })
   }, [effectiveParticipantId, events, filters])
 

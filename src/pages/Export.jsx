@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import { calculateRanking } from '../domain/ranking'
 import { loadExportData } from '../features/export/exportData'
+import { withRankingPositions } from '../features/export/rankingRows'
 import { totalsAsScoreEntries } from '../features/scores/scoreTotals'
 import { summarizeScores } from '../domain/scoring'
 import { useActiveCamp } from '../hooks/useActiveCamp'
@@ -354,20 +355,22 @@ export default function Export() {
         penaltyPoints: totalPenaltyPoints,
         total: totalBalance,
       } = summarizeScores(aggregateEntries)
-      const ranking = calculateRanking(
-        competitionTeams,
-        aggregateEntries,
-        participants,
-        {
-          includeInactive: true,
-          scoreTeamIdField: 'competition_team_id',
-          participantTeamIdField: 'competition_team_id',
-        },
-      ).map((team) => ({
-        ...team,
-        isActive: team.status === 'active',
-        eventsCount: eventCounts.get(team.id) || 0,
-      }))
+      const ranking = withRankingPositions(
+        calculateRanking(
+          competitionTeams,
+          aggregateEntries,
+          participants,
+          {
+            includeInactive: true,
+            scoreTeamIdField: 'competition_team_id',
+            participantTeamIdField: 'competition_team_id',
+          },
+        ).map((team) => ({
+          ...team,
+          isActive: team.status === 'active',
+          eventsCount: eventCounts.get(team.id) || 0,
+        }))
+      )
       const activeRanking = ranking.filter((team) => team.isActive)
       const leader = activeRanking[0]
       const legacyGymkhanaParticipants = participants.filter(
@@ -475,8 +478,8 @@ export default function Export() {
           { header: 'Status cadastral', key: 'status' },
           { header: 'Criado em', key: 'created_at' },
         ],
-        ranking.map((team, index) => ({
-          position: index + 1,
+        ranking.map((team) => ({
+          position: team.position ?? '-',
           id: team.id,
           name: team.name,
           symbol: team.symbol,

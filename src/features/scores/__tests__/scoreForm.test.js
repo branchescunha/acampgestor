@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 
 import {
   buildScorePayload,
   filterScoreEvents,
+  initialScoreFilters,
   initialScoreForm,
   isLegacyScoreEditing,
   validateScoreForm,
@@ -102,4 +104,30 @@ test('filterScoreEvents filters by competition team and search text', () => {
     }),
     [events[0]],
   )
+})
+
+test('team filter includes legacy room scores using the same destination as totals', () => {
+  const legacy = { tribe_id: 'room-1', competition_team_id: null,
+    tribes: { competition_team_id: 'team-1' }, points: 10 }
+  const direct = { competition_team_id: 'team-1', points: -5 }
+  const unrelated = { competition_team_id: 'team-2', points: 20 }
+  assert.deepEqual(filterScoreEvents([legacy, direct, unrelated], {
+    ...initialScoreFilters, competition_team_id: 'team-1',
+  }), [legacy, direct])
+})
+
+test('explicit score team takes precedence over a legacy room association', () => {
+  const score = { competition_team_id: 'team-2', tribes: { competition_team_id: 'team-1' } }
+  assert.deepEqual(filterScoreEvents([score], {
+    ...initialScoreFilters, competition_team_id: 'team-1',
+  }), [])
+})
+
+test('initial and post-save score queries retain the legacy room team for filtering', () => {
+  const source = readFileSync(new URL('../../../pages/Scores.jsx', import.meta.url), 'utf8')
+  const queries = [...source.matchAll(/\.from\('score_events'\)[\s\S]*?\.select\(\s*`([\s\S]*?)`/g)]
+  assert.equal(queries.length, 2)
+  for (const [, columns] of queries) {
+    assert.match(columns, /tribes\s*\([^)]*competition_team_id/)
+  }
 })

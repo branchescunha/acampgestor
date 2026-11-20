@@ -75,7 +75,7 @@ export function filterScoreEvents(events = [], filters = initialScoreFilters) {
       : true
 
     const matchesCompetitionTeam = filters.competition_team_id
-      ? eventItem.competition_team_id === filters.competition_team_id
+      ? (eventItem.competition_team_id || eventItem.tribes?.competition_team_id) === filters.competition_team_id
       : true
 
     const matchesTribe = filters.tribe_id

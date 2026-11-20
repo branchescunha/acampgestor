@@ -92,6 +92,7 @@ export default function Scores() {
           created_by,
           is_voided,
           tribes (
+            competition_team_id,
             name,
             color,
             symbol
@@ -206,6 +207,7 @@ export default function Scores() {
         created_by,
         is_voided,
         tribes (
+          competition_team_id,
           name,
           color,
           symbol
