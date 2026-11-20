@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuthContext } from '../hooks/useAuth'
 import {
   registerGestor,
   MIN_PASSWORD_LENGTH,
   validateRegistration,
+  describeRegistrationError,
 } from '../features/auth/registration'
 import { supabase } from '../lib/supabase'
 import { logError } from '../utils/logger'
@@ -17,6 +18,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const submitting = useRef(false)
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -25,6 +27,7 @@ export default function Register() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (submitting.current) return
     setError('')
     const validationError = validateRegistration(form)
     if (validationError) {
@@ -32,19 +35,18 @@ export default function Register() {
       return
     }
 
+    submitting.current = true
     setLoading(true)
     try {
       await registerGestor(supabase.auth, form)
       setForm(initialForm)
       setSuccess(true)
     } catch (registrationError) {
-      logError('Register', registrationError)
-      setError(
-        registrationError.code === 'signup_confirmation_required'
-          ? registrationError.message
-          : 'Não foi possível concluir o cadastro. Verifique os dados ou tente novamente mais tarde. Se já tem conta, entre ou procure o suporte.'
-      )
+      const diagnostic = describeRegistrationError(registrationError)
+      logError('Register', { code: diagnostic.code, status: diagnostic.status })
+      setError(diagnostic.message)
     } finally {
+      submitting.current = false
       setLoading(false)
     }
   }

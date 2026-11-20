@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { registerGestor, validateRegistration } from '../registration.js'
+import { describeRegistrationError, registerGestor, validateRegistration } from '../registration.js'
 
 const form = {
   name: 'Gestor de exemplo',
@@ -133,4 +133,66 @@ test('registration rejects inconsistent identity in the returned session', async
     },
   }
   await assert.rejects(registerGestor(auth, form), /validar a sessão/)
+})
+
+test('registration distinguishes disabled signup, provider, rate limits and provisioning errors', () => {
+  for (const [code, expected] of [
+    ['signup_disabled', /temporariamente desativado/],
+    ['email_provider_disabled', /e-mail.*indisponível/],
+    ['over_request_rate_limit', /Aguarde/],
+    ['over_email_send_rate_limit', /Aguarde/],
+    ['weak_password', /senha.*requisitos/],
+    ['unexpected_failure', /preparar a conta.*suporte/],
+    ['signup_confirmation_required', /confirmação.*suporte/],
+  ]) {
+    const result = describeRegistrationError({ code, status: 422, message: 'private server details' })
+    assert.match(result.message, expected)
+    assert.equal(result.code, code)
+    assert.equal(result.status, 422)
+    assert.doesNotMatch(JSON.stringify(result), /private server details/)
+  }
+})
+
+test('registration errors do not enumerate accounts or expose arbitrary server details', () => {
+  const fallback = describeRegistrationError(null)
+  for (const code of ['user_already_exists', 'email_exists', 'validation_failed', 'unknown_private_value']) {
+    const result = describeRegistrationError({ code, status: 400, message: 'private@example.test token=secret' })
+    assert.equal(result.message, fallback.message)
+    assert.doesNotMatch(JSON.stringify(result), /private@example|token=secret|unknown_private/)
+  }
+})
+
+test('registration reports network failures without exposing network details', () => {
+  const result = describeRegistrationError({ name: 'AuthRetryableFetchError', message: 'sensitive URL' })
+  assert.match(result.message, /conexão/)
+  assert.equal(result.code, 'network_error')
+  assert.doesNotMatch(JSON.stringify(result), /sensitive URL/)
+})
+
+test('Auth service failures are not mislabeled as a local connectivity problem', () => {
+  const result = describeRegistrationError({ name: 'AuthRetryableFetchError', status: 500, message: 'private database failure' })
+  assert.equal(result.code, 'service_unavailable')
+  assert.match(result.message, /serviço de cadastro.*indisponível/)
+  assert.doesNotMatch(JSON.stringify(result), /private database failure/)
+})
+
+test('a registration with a previously deleted email accepts only the new Auth identity', async () => {
+  const session = { user: { id: 'new-independent-uid' } }
+  let calls = 0
+  const auth = {
+    async signUp() {
+      calls++
+      return { data: { user: { id: 'new-independent-uid' }, session }, error: null }
+    },
+  }
+  assert.equal(await registerGestor(auth, form), session)
+  assert.equal(calls, 1)
+  assert.notEqual(session.user.id, 'deleted-uid')
+})
+
+test('existing email and profile provisioning failures are not reported as successful registrations', async () => {
+  for (const code of ['user_already_exists', 'unexpected_failure']) {
+    const auth = { async signUp() { return { data: null, error: { code, status: 422 } } } }
+    await assert.rejects(registerGestor(auth, form), (error) => error.code === code)
+  }
 })

@@ -1,6 +1,26 @@
 # V2: cadastro público e primeiro acampamento
 
-O frontend deste incremento está implementado localmente e ainda não foi publicado. Conforme informado pelo responsável, a migration 014 foi aplicada em produção, trigger, policies e bloqueios de RPCs foram verificados, a Edge Function retorna HTTP 410 e o ADMIN continua funcionando. Cadastro e isolamento reais ainda não foram testados. Novos cadastros permanecem desativados e Confirm email, habilitado.
+## Estado atual e desbloqueio da homologação
+
+Em 20/11/2026, uma consulta real, somente leitura, a `/auth/v1/settings` confirmou `disable_signup=true`, `mailer_autoconfirm=true` e `external.email=true`. Portanto, novos cadastros estão bloqueados no servidor; o provedor Email está habilitado e não exige confirmação. Esse bloqueio independe de reutilizar o endereço de uma conta excluída. Não foram realizadas tentativas de signup, consultas a e-mails específicos ou alterações no Auth nesta investigação.
+
+O frontend V2 já está publicado e o QA operacional de gestores e isolamento foi concluído anteriormente, conforme as [notas da V2.0.0](releases/v2.0.0.md). Isso não comprova o novo cadastro com e-mail reutilizado. As seções de implantação abaixo registram também a preparação histórica da Fase 1; não reaplicar a 014 nem reimplantar os fluxos legados.
+
+Para desbloquear o cadastro, o responsável deve, mediante autorização específica, abrir o projeto correto no painel Supabase, em **Authentication > Sign In / Providers**, e habilitar **Allow new users to sign up**. Preservar Email habilitado e a configuração atual de confirmação desabilitada, sem mudar login anônimo, linking, senha ou SMTP. Os nomes das seções podem variar no painel; a [documentação oficial](https://supabase.com/docs/guides/auth/general-configuration) descreve as opções. Reconsultar settings: o resultado esperado é `disable_signup=false`, `mailer_autoconfirm=true`, `external.email=true`. Nenhuma configuração foi alterada automaticamente.
+
+Manter os [rate limits do Auth](https://supabase.com/docs/guides/auth/rate-limits), sem aumentá-los para contornar falhas. Os limites efetivos e os logs de uma tentativa anterior não foram consultados pela API pública de settings; não se atribuiu o erro relatado a rate limiting, trigger ou endereço duplicado sem evidência. O formulário diferencia indisponibilidade de cadastro/provedor, limites, senha e falhas de provisionamento, sem publicar mensagens brutas do servidor ou confirmar a existência de um endereço. Os diagnósticos em desenvolvimento contêm apenas códigos conhecidos e status HTTP.
+
+Não habilitar CAPTCHA apenas no backend: o formulário atual não envia `captchaToken`; [CAPTCHA exige integração no frontend](https://supabase.com/docs/guides/auth/auth-captcha). A proteção contra automação permanece limitada aos controles existentes do provedor até uma integração autorizada. Sem confirmação, e-mail não comprova titularidade; recuperação e associações continuam dependendo de UID e autorização, nunca apenas do endereço.
+
+### Reutilização de e-mail e exclusões parciais
+
+A implementação revisada chama `auth.admin.deleteUser(targetId, false)` (exclusão definitiva), depois de preparar a remoção pelo UID. O sucesso depende de `account_deletion_status='completed'`; a função SQL também exige ausência do UID em Auth e profiles. O DELETE Auth, a cascata do profile e a conclusão do recibo compartilham a transação do Auth. Falhas retornam estado pendente/erro, não sucesso completo. Nenhuma exclusão adicional foi executada ou conta real consultada nesta revisão.
+
+Após a liberação manual, o proprietário deve cadastrar um endereço novo e depois o endereço da conta de teste efetivamente excluída. Conferir o novo UID, profile `gestor` ativo, ausência de vínculos antigos e acesso somente aos próprios acampamentos. O recibo antigo continua associado ao UID antigo. Se ocorrer `user_already_exists`/`email_exists`, o ADMIN deve conferir a identidade ainda presente; se houver `unexpected_failure` ou profile suspenso por conflito, revisar Auth logs e o conflito de profiles pelo UID, sem apagar ou associar identidades automaticamente. Preservar o ADMIN. Testes locais de fronteira não comprovam essa sequência no banco real.
+
+## Registro do incremento original
+
+A migration 014 foi aplicada e verificada, os bloqueios legados foram instalados e o ADMIN foi preservado. O restante deste documento descreve o desenho, limites e procedimento original; o estado atual está registrado acima.
 
 ## Fluxo
 
