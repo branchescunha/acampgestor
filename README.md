@@ -66,6 +66,8 @@ docs/             Documentação técnica, capturas e notas de versão
 
 A aplicação **2.0.0** está publicada, com validação operacional real dos fluxos principais e exclusão controlada do acampamento exclusivo de QA concluídas. Os demais dados e acessos foram preservados. Exclusão real de contas, concorrência, restauração de backup e validação final em dispositivos físicos permanecem não concluídas. Consulte as [notas da V2.0.0](docs/releases/v2.0.0.md) e a [GitHub Release](https://github.com/branchescunha/acampgestor/releases/tag/v2.0.0).
 
+As correções de manutenção posteriores mantêm a identificação **2.0.0**. A `main` e a produção avançam além do commit original `7627337`, marcado pela tag `v2.0.0`; a tag e a GitHub Release original permanecem inalteradas. As notas acima registram também essas correções posteriores.
+
 ## Autor
 
 André Vinícius Branches Cunha

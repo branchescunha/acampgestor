@@ -69,11 +69,11 @@ test('metadados referenciam assets existentes, sitemap lista apenas a pagina pub
   assert.ok(config.headers.some(rule => rule.headers.some(header => header.key === 'X-Robots-Tag' && header.value.includes('noindex'))))
 })
 
-test('versao 2.0.1 consistente sem renomear pacote; imagens do README existem', () => {
+test('versao 2.0.0 consistente sem renomear pacote; imagens do README existem', () => {
   const pkg = JSON.parse(read('package.json'))
   const lock = JSON.parse(read('package-lock.json'))
   assert.equal(pkg.name, 'acamp-gestor')
-  assert.equal(pkg.version, '2.0.1')
+  assert.equal(pkg.version, '2.0.0')
   assert.equal(lock.version, pkg.version)
   assert.equal(lock.packages[''].version, pkg.version)
   const readme = read('README.md').toString('utf8')
