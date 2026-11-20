@@ -187,14 +187,16 @@ export default function CreateCampForm({ userId, onCreated, onCancel, camp = nul
           {error}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={saving || loadingSlots || Boolean(slotsError)}
-        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        <Plus size={18} />
-        {saving ? 'Salvando...' : camp ? 'Salvar acampamento' : 'Criar acampamento'}
-      </button>
+      <div className="mt-5 flex justify-end">
+        <button
+          type="submit"
+          disabled={saving || loadingSlots || Boolean(slotsError)}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        >
+          <Plus size={18} />
+          {saving ? 'Salvando...' : camp ? 'Salvar acampamento' : 'Criar acampamento'}
+        </button>
+      </div>
     </form>
   )
 }

@@ -324,7 +324,7 @@ export default function Organizations() {
           {editingId ? 'Editar organização' : 'Criar organização'}
         </h2>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-6 grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           <input
             name="name"
             value={form.name}
@@ -337,7 +337,7 @@ export default function Organizations() {
             name="type"
             value={form.type}
             onChange={handleChange}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500"
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 md:h-[50px]"
           >
             <option value="church">Igreja</option>
             <option value="school">Escola</option>
@@ -366,7 +366,7 @@ export default function Organizations() {
             onChange={handleChange}
             placeholder="Observações"
             rows={3}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 md:col-span-2"
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-500 md:col-span-2 md:h-[50px] md:resize-none md:overflow-y-auto"
           />
         </div>
 

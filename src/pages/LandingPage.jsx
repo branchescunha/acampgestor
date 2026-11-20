@@ -72,9 +72,9 @@ const steps = [
 ]
 
 const rankingPreview = [
-  { name: 'Equipe Azul', points: 980, color: 'bg-blue-500' },
-  { name: 'Equipe Verde', points: 850, color: 'bg-emerald-500' },
-  { name: 'Equipe Vermelha', points: 730, color: 'bg-red-500' },
+  { name: 'Equipe Leão', symbol: '🦁', points: 980, color: 'bg-yellow-500' },
+  { name: 'Equipe Tubarão', symbol: '🦈', points: 850, color: 'bg-blue-500' },
+  { name: 'Equipe Águia', symbol: '🦅', points: 730, color: 'bg-red-500' },
 ]
 
 function PrimaryCta({ className = '' }) {
@@ -151,7 +151,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/30">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-3 shadow-2xl shadow-black/30 sm:p-5">
             <div className="flex items-center justify-between gap-4 border-b border-zinc-800 pb-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.25em] text-yellow-500">
@@ -172,7 +172,7 @@ export default function LandingPage() {
                     <span className="w-8 shrink-0 text-xl font-black text-yellow-500">
                       #{index + 1}
                     </span>
-                    <span className={`h-10 w-10 shrink-0 rounded-xl ${team.color}`} />
+                    <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-2xl leading-none ${team.color}`}>{team.symbol}</span>
                     <strong className="min-w-0 break-words text-sm leading-tight sm:text-base">{team.name}</strong>
                   </div>
                   <span className="whitespace-nowrap text-lg font-black text-green-400 sm:text-xl">
@@ -182,18 +182,18 @@ export default function LandingPage() {
               ))}
             </div>
 
-            <div className="mt-5 grid min-w-0 grid-cols-3 gap-2 text-center text-xs sm:gap-3 sm:text-sm">
-              <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
+            <div className="landing-ranking-stats mt-5 grid min-w-0 grid-cols-3 gap-1 text-center text-xs sm:gap-3 sm:text-sm">
+              <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 px-1 py-3 sm:p-4">
                 <strong className="block text-lg leading-tight sm:text-xl">8</strong>
-                  <span className="block break-words leading-tight text-zinc-400">equipes</span>
+                  <span className="block whitespace-nowrap leading-tight text-zinc-400">equipes</span>
               </div>
-              <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
+              <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 px-1 py-3 sm:p-4">
                 <strong className="block text-lg leading-tight sm:text-xl">142</strong>
-                <span className="block break-words leading-tight text-zinc-400">participantes</span>
+                <span className="block whitespace-nowrap leading-tight text-zinc-400">participantes</span>
               </div>
-              <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
+              <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-950 px-1 py-3 sm:p-4">
                 <strong className="block text-lg leading-tight sm:text-xl">24</strong>
-                <span className="block break-words leading-tight text-zinc-400">lançamentos</span>
+                <span className="block whitespace-nowrap leading-tight text-zinc-400">lançamentos</span>
               </div>
             </div>
           </div>
@@ -334,7 +334,7 @@ export default function LandingPage() {
                   <span className="shrink-0 text-lg font-black text-yellow-500">
                     #{index + 1}
                   </span>
-                  <span className={`h-9 w-9 shrink-0 rounded-xl ${team.color}`} />
+                  <span aria-hidden="true" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-2xl leading-none ${team.color}`}>{team.symbol}</span>
                   <span className="min-w-0 break-words text-sm font-semibold leading-tight sm:text-base">{team.name}</span>
                 </div>
                 <strong className="whitespace-nowrap">{team.points} pts</strong>

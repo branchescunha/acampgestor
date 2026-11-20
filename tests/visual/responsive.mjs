@@ -8,6 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { createMockContext } from './fixtures.mjs'
 import { accountNavigationInteractions } from './account-navigation.mjs'
 import { permanentDeletionInteractions } from './permanent-deletion.mjs'
+import { registrationInteractions, validateHomologationLayout } from './homologation.mjs'
 
 const require = createRequire(import.meta.url)
 const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
@@ -53,6 +54,11 @@ const routes = {
       'exportacao',
     ].map((path) => `/qa-unificado/gestor/${path}`),
   ],
+}
+
+if (process.env.QA_PATHS) {
+  const selected = new Set(process.env.QA_PATHS.split(','))
+  for (const role of Object.keys(routes)) routes[role] = routes[role].filter(path => selected.has(path))
 }
 
 async function ready(page, path) {
@@ -502,6 +508,7 @@ try {
                       .click()
                   const metrics = await measure(page)
                   validate(metrics, `${engine} ${width} ${theme} ${path}`)
+                  if (phase === 'homologation') await validateHomologationLayout(page, path, width)
                   if (path === '/qa-unificado') {
                     const podium = await page
                       .getByLabel('Pódio', { exact: true })
@@ -563,11 +570,12 @@ try {
         }
         console.log(`${engine}: ${groupWidths.join(', ')}px approved`)
       }
-      if (!['layout', 'account', 'deletion'].includes(phase))
+      if (phase === 'homologation') await registrationInteractions(browser, engine, baseURL)
+      if (!['layout', 'account', 'deletion', 'homologation'].includes(phase))
         await essentialInteractions(browser, engine)
       if (phase === 'deletion')
         await permanentDeletionInteractions(browser, engine, baseURL, errors)
-      if (!['layout', 'deletion'].includes(phase))
+      if (!['layout', 'deletion', 'homologation'].includes(phase))
         await accountNavigationInteractions(
           browser,
           engine,

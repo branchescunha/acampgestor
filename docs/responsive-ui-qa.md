@@ -2,6 +2,25 @@
 
 ## Correções
 
+### Homologação final da V2.0.0 (20/11/2026)
+
+- O botão de envio dos formulários de acampamento ocupa o limite direito no desktop e toda a largura no mobile. No formulário ADMIN, sua área agora ocupa as duas colunas da grade, sem alterar os 21 turnos ou a persistência.
+- Organizações: os campos não esticam pela altura de Observações. No desktop, select e textarea têm 50px, como os inputs; o select nativo do WebKit antes media 54px. Observações mantém rolagem e edição no desktop, e três linhas no mobile.
+- A landing preserva os indicadores 8/142/24, com palavras inteiras, fonte mínima de 12px e espaçamentos reduzidos somente no mobile. O preview fictício usa Equipe Leão (980), Tubarão (850) e Águia (730), com emojis decorativos centralizados e nomes acessíveis. Nenhum ranking real foi alterado.
+- Regressão focada em cinco telas, 320/375/390/414/768/1440px, ambos os temas e Chromium/WebKit: 120 estados de layout. Os sete cenários de erro/carregamento do cadastro passaram em cada motor, incluindo bloqueio de envios simultâneos. As respostas simuladas expõem o header de versão do Auth, necessário ao SDK para interpretar os códigos.
+- O teste inicialmente identificou o desnível real do select no WebKit e uma resposta simulada incompleta; ambos foram corrigidos. Os testes usam exclusivamente fixtures, sem criar/excluir contas ou dados reais. Não equivalem a validação no iPhone físico ou a comprovação de signup no Supabase.
+
+Para repetir somente esta rodada com os navegadores já disponíveis:
+
+```powershell
+$env:QA_PHASE = 'homologation'
+$env:QA_PATHS = '/,/cadastro,/admin/acampamentos,/admin/organizacoes,/gestor'
+$env:QA_WIDTHS = '320,375,390,414,768,1440'
+npm run test:visual
+```
+
+### Correções anteriores
+
 - `DateField` mantém o input nativo, seu tipo, valor ISO, eventos, validação e associação com labels. A borda e o padding pertencem ao wrapper; o input tem padding zero e `appearance: none`, sem substituir o seletor nativo por um calendário próprio. Todos os cinco campos de data usam o componente.
 - O [bug WebKit 301648](https://bugs.webkit.org/show_bug.cgi?id=301648) documenta cálculo incorreto de `width: 100%` com padding em inputs temporais no iOS, inclusive com diferenças em relação ao desktop. A configuração anterior do projeto continha essa combinação. **O overflow específico do aparelho relatado não foi reproduzido no WebKit do Windows**; a correção remove essa condição, mas o seletor e a geometria no iPhone real ainda precisam de conferência.
 - A regressão desktop foi reproduzida em Chromium e WebKit: na tabela de acampamentos em 1024 px, a coluna espremia botões até 22 px de largura e 155 px de altura. `ResponsiveTable` reserva 224 px para ações e usa container queries: a tabela aparece somente quando há ao menos 1024 px no próprio container, considerando o espaço ocupado pela sidebar; em menos espaço usa cards. Navegadores sem container queries mantêm os cards funcionais. `RecordActions` permite reorganização das ações sem quebra de palavras ou ícones. Rolagem horizontal fica restrita às tabelas extensas, não ao documento.

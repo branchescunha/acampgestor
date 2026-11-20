@@ -622,7 +622,7 @@ export default function Camps() {
             {slotsError && <p role="alert" className="mt-3 text-sm text-red-300">{slotsError}</p>}
           </div>
 
-          <div className="flex min-w-0 flex-col justify-end gap-3 sm:flex-row md:items-end md:justify-end">
+          <div className="flex min-w-0 flex-col justify-end gap-3 sm:flex-row md:col-span-2 md:items-end md:justify-end">
             {editingId && (
               <button
                 type="button"
